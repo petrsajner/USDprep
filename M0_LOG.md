@@ -75,6 +75,41 @@ entry.usda (subLayers: baked_procedurals/main, trailer_cameras/main, light_pre_i
   → first data point for the §5.6 qualified-driver table: **RTX 5090, driver 591.86, OpenGL 4.6 — WORKS**.
 - GPU/driver check confirmed working in practice (no Mesa fallback needed on the dev machine).
 
+## ALab material-aware extraction test ✅ (done)
+
+After installing techvars (see gotcha below): full stage = **11,887 prims / 1,522 meshes / 1,267 materials**, loads in 0.2 s.
+
+```
+usdcat --flatten --mask /root/alab_set01/lab_projector01_0001 entry.usda -o alab_projector.usda   # 1.86 MB
+usdcat alab_projector.usda -o alab_projector.usdc                                                  # 394 KB
+usdzip --asset alab_projector.usdc alab_projector_asset.usdz                                       # 4.8 MB w/ textures
+```
+
+- Materials in ALab entities are nested **inside** the extracted subtree (`…/MATERIAL/usd_full`, `usd_preview`, `usd_preview_proxy`) → mask+flatten **preserves meshes, materials, bindings, both shader networks** (full renderer + UsdPreviewSurface preview). Structure is Nuke-friendly by design.
+- `usdzip --asset <in.usdc> <out.usdz>` (asset path is an OPTION value) localizes + packages the **UDIM tiles** (1001.exr set) and preview jpgs; two warnings for preview jpg refs that were authored relative — files still included.
+
+**Product backlog confirmed (what usdprep must cururate):**
+1. Flatten keeps **absolute texture paths** (Windows paths into the source tree) → relink/pack (usdzip --asset does it, but with warnings; our tool should do it deliberately).
+2. `instanceable = true` survives flatten → standalone single-instance assets should be **de-instanced** (tools that don't traverse instance proxies see an empty subtree — bit us in our own roundtrip check).
+3. `defaultPrim` not set on output → set to the asset prim.
+4. Preview **cards** (0/ textures, `preview` purpose) get packaged → purpose-based pruning.
+
+### Techvars install gotchas
+- The 9.6 GB zip contains `techvar_assets/fragment/…`; correct install = merge into `ALab/fragment/` **overriding** placeholders: `tar -xf zip --strip-components=2 -C ALab/fragment`.
+- The official `install_optional_packages.py` has a **Windows bug**: `_unzip` filters members by `zip_file_folder_name + os.sep` (`fragment\`), which never matches zip paths → writes nothing yet reports success.
+- Placeholder mesh files (`#usda 1.0 … placeholder layer`) are committed to the repo on purpose; real crate files start with `PXR-USDC`.
+
+## Status at end of session
+
+| M0 item | State |
+|---|---|
+| usdtweak built on Windows | ✅ (conda USD 25.11, VS2019, exe 10.7 MB, running) |
+| Test scenes | ✅ Kitchen Set, ALab + techvars + cameras, usd-wg/assets |
+| mask→flatten→usdc→usdz pipeline | ✅ on both scenes, materials/UDIM textures survive |
+| Addon mechanism understood | ✅ (doc/Addons.md) |
+| Nuke 16.0 + 17 load test | ⏳ user-side: try `testdata/out/teakettle.usdz` and `testdata/out/alab_projector_asset.usdz` |
+| Mesa fallback decision | ✅ not needed on dev machine (RTX 5090); revisit for release |
+
 ## Addon mechanism (studied, for the future Prep panel)
 
 `doc/Addons.md` is a complete addon guide: drop a folder in `src/addons/<Name>/` with a one-line CMakeLists (`usdtweak_add_addon`), register via `TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, Tag)`, talk to the editor only via stable `src/addons/Api.h` (GetCurrentStage, selection, OpenStage, SearchPrimsByName, settings, modal dialogs, notices). Mutations must go through `ExecuteAfterDraw` for undo. CMake auto-globs addon folders (CONFIGURE_DEPENDS) — no host file edits needed. Three example addons ship (LauncherBar, ShaderRegistryInspector, StormPlayblast).
