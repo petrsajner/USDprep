@@ -58,10 +58,23 @@ entry.usda (subLayers: baked_procedurals/main, trailer_cameras/main, light_pre_i
 - Mask+flatten of `/root/alab_set01/lab_projector01_0001` on the hollow repo: geometry didn't appear (payload files are placeholders) — retest after techvars install.
 - **Product insight confirmed:** raw `usdcat --mask --flatten` is not enough for Nuke-ready output: materials/textures live behind payloads in `fragment/look/...`, referenced by paths that break when subtree is extracted; `defaultPrim`, `purpose`, texture relinking must be curated by our tool.
 
-## usdtweak build (in progress)
+## usdtweak build ✅ (done)
 
 - Cloned `develop` @ 7332fce ("fix patch and build issue on windows").
-- `windows-build.ps1` hard-requires **VS2022**; we have VS2019 BuildTools → replicate its steps manually with `-G "Visual Studio 16 2019"`.
-- Script path: downloads NVIDIA USD 25.08 py312 (~464 MB) → synthesizes TBB/OpenSubdiv/Imath CMake configs (NVIDIA pkg ships libs but not configs) → cmake configure → build RelWithDebInfo.
-- Building.md supports MSVC 19 (VS2019) explicitly; NVIDIA 24.08 section documents the osdGPU/osdCPU link fix (may or may not apply to 25.08).
-- pixi.toml is macOS-only (osx-arm64) — pixi path not used for Windows upstream.
+- `windows-build.ps1` hard-requires **VS2022**; machine has VS2019 BuildTools (MSVC 14.29) → replicated its steps manually with `-G "Visual Studio 16 2019"`.
+- **Attempt 1 — NVIDIA USD 25.08 (464 MB):** configure OK (after synthesizing TBB/OpenSubdiv/Imath cmake configs exactly like the script; the 25.08 pkg does ship osdCPU/osdGPU libs). **Compile FAILS**: `develop` now targets USD ≥25.11/26.x (`pxr/usd/sdf/textParserUtils.h` missing, `SdfAttributeSpec::HasSpline` absent in 25.08). The ps1/NVIDIA pin is stale vs develop. Lesson: don't trust the script's pinned USD; check `pixi.toml`/Building.md.
+  - Also: `cmd | tail` swallows the build's exit code (pipeline status) — always log to file and echo `$?` separately.
+- **Attempt 2 — conda-forge openusd 25.11 (already in pixi env): SUCCESS.**
+  - `cmake -S . -B build-conda -G "Visual Studio 16 2019" -A x64 -Dpxr_DIR=<env>/Library -DCMAKE_PREFIX_PATH=<env>/Library/lib/cmake` + conda python paths (`<env>/python.exe`, `<env>/libs/python314.lib`, `<env>/include`, version 3.14 — pxrConfig requires exact-version Python).
+  - MSVC 14.29 links cleanly against the clang-cl-built conda import libs.
+  - Result: `build-conda/RelWithDebInfo/usdtweak.exe` (10.7 MB), exit 0.
+- **Run:** launched via `pixi run --manifest-path third_party/usdtools/pixi.toml <exe> testdata/.../Kitchen_set.usd` (pixi activates the env → DLLs on PATH). App started fine:
+  ```
+  NVIDIA GeForce RTX 5090 / OpenGL 4.6.0 NVIDIA 591.86 / GLSL 4.60 / USD 2511
+  ```
+  → first data point for the §5.6 qualified-driver table: **RTX 5090, driver 591.86, OpenGL 4.6 — WORKS**.
+- GPU/driver check confirmed working in practice (no Mesa fallback needed on the dev machine).
+
+## Addon mechanism (studied, for the future Prep panel)
+
+`doc/Addons.md` is a complete addon guide: drop a folder in `src/addons/<Name>/` with a one-line CMakeLists (`usdtweak_add_addon`), register via `TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, Tag)`, talk to the editor only via stable `src/addons/Api.h` (GetCurrentStage, selection, OpenStage, SearchPrimsByName, settings, modal dialogs, notices). Mutations must go through `ExecuteAfterDraw` for undo. CMake auto-globs addon folders (CONFIGURE_DEPENDS) — no host file edits needed. Three example addons ship (LauncherBar, ShaderRegistryInspector, StormPlayblast).
