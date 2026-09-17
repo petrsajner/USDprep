@@ -2,7 +2,7 @@
 
 **Working name:** *USD Prep* (final name TBD — see Open Questions)
 **Date:** 2026-09-17
-**Status:** Draft v1.1 for review (v1.1: Nuke 16.0 set as compatibility floor)
+**Status:** Draft v1.2 for review (v1.1: Nuke 16.0 floor; v1.2: single self-contained installer requirement)
 **Goal:** A small, simple tool that takes production USD scenes from the CG department and turns them into light, Nuke-friendly USD assets — extract one object, delete the rest, optimize, simplify, package.
 
 ---
@@ -12,9 +12,10 @@
 1. **Base the tool on [usdtweak](https://github.com/cpichard/usdtweak)** — contrary to its stale `master` README, the project is **actively maintained** (commits Aug 2026, monthly installers incl. `win64.exe`), Apache-2.0, C++/ImGui, builds against OpenUSD 25.x, and — crucially — has an official **addons mechanism** designed exactly for "build dedicated tools on top of the main application".
 2. **Do not fork-and-diverge.** Stay close to upstream: implement our workflow as an **addon + a shared core library**, so we keep receiving upstream fixes for free.
 3. **Ship two faces from one core:** a headless **CLI** (`usdcut`) for batch/farm use, and a **GUI** (usdtweak + our "Prep" panel) for TDs/artists. All logic lives in a UI-free C++ library so both are guaranteed identical.
-4. **Target profile: "Nuke-ready USD"** — flattened, self-contained, UsdPreviewSurface/MaterialX materials, Nuke-readable textures, pruned hierarchy, optional decimation, packaged as `.usdz`. One click via a *Nuke preset*.
-5. **Pin OpenUSD 25.x** initially (matches Nuke 17's USD 25.08 and usdtweak's own pin `>=25.5.1,<26`); write conservative output readable by **USD 24.05 (Nuke 16.0, our compatibility floor)** and newer. Revisit 26.x later.
-6. Rough effort: **~10–13 weeks solo** to a hardened v1 (milestone plan in §6).
+4. **Deliver one self-contained installer.** Our own branded build of the app (usdtweak with the Prep addon compiled in) plus `usdcut`, with OpenUSD and every dependency bundled. Install → done, 100% functional: **no add-ons to assemble, no admin rights, no internet access**, no Python/DCC prerequisites. Windows first, Linux second.
+5. **Target profile: "Nuke-ready USD"** — flattened, self-contained, UsdPreviewSurface/MaterialX materials, Nuke-readable textures, pruned hierarchy, optional decimation, packaged as `.usdz`. One click via a *Nuke preset*.
+6. **Pin OpenUSD 25.x** initially (matches Nuke 17's USD 25.08 and usdtweak's own pin `>=25.5.1,<26`); write conservative output readable by **USD 24.05 (Nuke 16.0, our compatibility floor)** and newer. Revisit 26.x later.
+7. Rough effort: **~10–13 weeks solo** to a hardened v1 (milestone plan in §6).
 
 ---
 
@@ -40,6 +41,7 @@
 ### 1.3 Constraints & priorities
 
 - **Windows primary, Linux secondary.** Completely **English UI**.
+- **Delivery: one self-contained installer.** Install → done: **100% functional with zero add-ons to assemble, no admin rights, no internet access** (at install or run time), no Python/DCC prerequisites. Everything (OpenUSD + plugins, texture/OIIO libs, GUI and CLI) travels inside the package. Windows installer first, Linux package second.
 - **Clarity and simplicity are the top priority.** This is *not* a general USD editor — it is a focused preparation utility. Few operations, obvious workflow, good reports.
 - Must handle **current** USD (OpenUSD 25.x/26.x) and **Nuke 16.0 and newer** — 16.0 is the compatibility floor, 17.x is the current version.
 
@@ -236,6 +238,7 @@ usdcut inspect scene.usd --report out.json
 ### 5.2 Relationship to usdtweak (fork strategy)
 
 - **Stay upstream-compatible.** We track `develop`, contribute generic fixes upstream (PRs), and keep our product entirely in the addon + core library. No vendored forks of USD.
+- The addon is a **build-time concept only**: we compile usdtweak with our addon baked in and ship the result as **our own application** (own name/icon). End users install one app — they never install or even see an add-on.
 - Rebranding happens in our build (app name/icon), not in divergent code.
 - If upstream stalls, the addon boundary means we can lift the shell and continue independently — the core survives either way.
 
@@ -258,8 +261,12 @@ Other dependencies: `meshoptimizer` (MIT, header-friendly), OpenImageIO for text
 
 ### 5.5 Distribution
 
-- GUI: installer (NSIS/MSIX or the packaged zip approach usdtweak uses), USD + plugins bundled, no DCC or Python required by end users.
-- CLI: zip with exe + libs; also usable inside Nuke's Python? No — CLI stays a separate process (Nuke's internal USD version must not be polluted by ours).
+**Hard requirement: one self-contained, offline, no-admin installer — "install, done".**
+
+- **Windows (primary):** a single **NSIS per-user installer** — installs under `%LOCALAPPDATA%\Programs\<App>`, needs **no admin rights**, **no internet**, and bundles everything: our own-built OpenUSD (+ plugins/Hydra delegates), OpenImageIO, meshoptimizer, and both executables (GUI + `usdcut`, optional per-user PATH entry). Includes an uninstaller; no Python, no DCC, no separate runtimes. usdtweak already ships bundled `win64.exe` installers, so the packaging pattern is proven.
+- **Linux (secondary):** **AppImage** — one file, no installation, no root, bundles the same payload and runs on mainstream distros; `.deb`/`.rpm` only if the studio asks.
+- **What never ships:** conda/pixi environments, NVIDIA prebuilt USD binaries (license terms), anything requiring a download at install time. Dev machines may use those; distributed packages contain only **our own-built, version-pinned dependencies**.
+- The CLI stays a separate process — it must never be loaded into Nuke's Python (Nuke's internal USD version must not be polluted by ours).
 
 ---
 
@@ -271,7 +278,7 @@ Other dependencies: `meshoptimizer` (MIT, header-friendly), OpenImageIO for text
 | **M1 — Core + CLI MVP** | `usdprep-core`: Inspect, Select, Extract, Prune, Flatten, Package + Nuke preset v0 + JSON reports; `usdcut` CLI; unit + golden tests | The three CLI examples from §4.3 pass on 3 test scenes | 2–3 wk |
 | **M2 — GUI addon** | Prep panel in usdtweak: load → choose (tree/filters/viewport assist) → run → report view | A non-USD-expert TD extracts a prop without docs | 2–3 wk |
 | **M3 — Optimize & simplify** | Strip (materials/primvars/variants/metadata), Textures (convert/cap/relink), Simplify (meshoptimizer), Trim (frame range); preset v1 | ≥70% size/load-time reduction on benchmark scene (target, validated in Nuke) | 3–4 wk |
-| **M4 — Harden & ship** | Linux build, CI matrix, installer, docs (short!), test matrix vs Nuke 16.0/16.1/17.x, error handling pass, v1.0 tag | Installer + zip on Windows & Linux; known-issues list published | 2 wk |
+| **M4 — Harden & ship** | Linux build, CI matrix, **single self-contained offline installer (Win, per-user) + AppImage (Linux)**, docs (short!), test matrix vs Nuke 16.0/16.1/17.x, error handling pass, v1.0 tag | Installer + AppImage, both installable/runnable **without admin or internet** on clean machines; known-issues list published | 2 wk |
 
 Total: **~10–13 weeks** to v1.0. M1 already delivers daily value via CLI even before any GUI exists.
 
@@ -292,6 +299,7 @@ Total: **~10–13 weeks** to v1.0. M1 already delivers daily value via CLI even 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | usdtweak is pre-alpha & moves fast | Addon breakage | Pin releases we track; core library keeps zero usdtweak deps; CI rebuilds weekly |
+| Self-contained bundle = large installer & packaging effort | Slower M4, disk footprint | usdtweak's own bundled installers prove the pattern — reuse its packaging; size is a one-time cost, documented in release notes |
 | OpenUSD build/packaging pain on Windows | Slowed M0/M4 | pixi/conda-forge for dev; proven `windows-build.ps1`; source build only for release |
 | NVIDIA prebuilt USD license terms | Legal if shipped | Ship only our own-built USD (conda/source) in distributed packages |
 | Nuke's Hydra quirks (textures, MaterialX) | Output not as light as hoped | M0 proves on real scenes first; env workarounds documented (e.g. `USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX`) |
