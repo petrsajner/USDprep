@@ -2,7 +2,7 @@
 
 **Working name:** *USD Prep* (final name TBD — see Open Questions)
 **Date:** 2026-09-17
-**Status:** Draft v1.2 for review (v1.1: Nuke 16.0 floor; v1.2: single self-contained installer requirement)
+**Status:** Draft v1.3 for review (v1.1: Nuke 16.0 floor; v1.2: single installer; v1.3: GPU/driver requirements policy)
 **Goal:** A small, simple tool that takes production USD scenes from the CG department and turns them into light, Nuke-friendly USD assets — extract one object, delete the rest, optimize, simplify, package.
 
 ---
@@ -12,7 +12,7 @@
 1. **Base the tool on [usdtweak](https://github.com/cpichard/usdtweak)** — contrary to its stale `master` README, the project is **actively maintained** (commits Aug 2026, monthly installers incl. `win64.exe`), Apache-2.0, C++/ImGui, builds against OpenUSD 25.x, and — crucially — has an official **addons mechanism** designed exactly for "build dedicated tools on top of the main application".
 2. **Do not fork-and-diverge.** Stay close to upstream: implement our workflow as an **addon + a shared core library**, so we keep receiving upstream fixes for free.
 3. **Ship two faces from one core:** a headless **CLI** (`usdcut`) for batch/farm use, and a **GUI** (usdtweak + our "Prep" panel) for TDs/artists. All logic lives in a UI-free C++ library so both are guaranteed identical.
-4. **Deliver one self-contained installer.** Our own branded build of the app (usdtweak with the Prep addon compiled in) plus `usdcut`, with OpenUSD and every dependency bundled. Install → done, 100% functional: **no add-ons to assemble, no admin rights, no internet access**, no Python/DCC prerequisites. Windows first, Linux second.
+4. **Deliver one self-contained installer.** Our own branded build of the app (usdtweak with the Prep addon compiled in) plus `usdcut`, with OpenUSD and every dependency bundled. Install → done, 100% functional: **no add-ons to assemble, no admin rights, no internet access**, no Python/DCC prerequisites. Windows first, Linux second. Sole user-side prerequisite: a GPU with vendor drivers (**OpenGL 4.5+**) for the viewport — required up front, never bundled (§5.6).
 5. **Target profile: "Nuke-ready USD"** — flattened, self-contained, UsdPreviewSurface/MaterialX materials, Nuke-readable textures, pruned hierarchy, optional decimation, packaged as `.usdz`. One click via a *Nuke preset*.
 6. **Pin OpenUSD 25.x** initially (matches Nuke 17's USD 25.08 and usdtweak's own pin `>=25.5.1,<26`); write conservative output readable by **USD 24.05 (Nuke 16.0, our compatibility floor)** and newer. Revisit 26.x later.
 7. Rough effort: **~10–13 weeks solo** to a hardened v1 (milestone plan in §6).
@@ -41,6 +41,7 @@
 ### 1.3 Constraints & priorities
 
 - **Windows primary, Linux secondary.** Completely **English UI**.
+- **GPU with vendor drivers is a runtime requirement for the 3D viewport** (any vendor — see §5.6); the app never bundles or installs GPU drivers. Machines without working GPU drivers run in a degraded no-viewport/software-rendering mode (§5.6).
 - **Delivery: one self-contained installer.** Install → done: **100% functional with zero add-ons to assemble, no admin rights, no internet access** (at install or run time), no Python/DCC prerequisites. Everything (OpenUSD + plugins, texture/OIIO libs, GUI and CLI) travels inside the package. Windows installer first, Linux package second.
 - **Clarity and simplicity are the top priority.** This is *not* a general USD editor — it is a focused preparation utility. Few operations, obvious workflow, good reports.
 - Must handle **current** USD (OpenUSD 25.x/26.x) and **Nuke 16.0 and newer** — 16.0 is the compatibility floor, 17.x is the current version.
@@ -265,8 +266,42 @@ Other dependencies: `meshoptimizer` (MIT, header-friendly), OpenImageIO for text
 
 - **Windows (primary):** a single **NSIS per-user installer** — installs under `%LOCALAPPDATA%\Programs\<App>`, needs **no admin rights**, **no internet**, and bundles everything: our own-built OpenUSD (+ plugins/Hydra delegates), OpenImageIO, meshoptimizer, and both executables (GUI + `usdcut`, optional per-user PATH entry). Includes an uninstaller; no Python, no DCC, no separate runtimes. usdtweak already ships bundled `win64.exe` installers, so the packaging pattern is proven.
 - **Linux (secondary):** **AppImage** — one file, no installation, no root, bundles the same payload and runs on mainstream distros; `.deb`/`.rpm` only if the studio asks.
-- **What never ships:** conda/pixi environments, NVIDIA prebuilt USD binaries (license terms), anything requiring a download at install time. Dev machines may use those; distributed packages contain only **our own-built, version-pinned dependencies**.
+- **What never ships:** conda/pixi environments, NVIDIA prebuilt USD binaries (license terms), **GPU drivers (never — vendor/user responsibility, see §5.6)**, anything requiring a download at install time. Dev machines may use those; distributed packages contain only **our own-built, version-pinned dependencies**.
+- The installer's welcome page states the runtime requirements up front (GPU with OpenGL 4.5 + installed vendor driver, link to the qualified-driver table) — no surprises after install.
 - The CLI stays a separate process — it must never be loaded into Nuke's Python (Nuke's internal USD version must not be polluted by ours).
+
+### 5.6 Runtime requirements & GPU/driver policy
+
+**What the viewport actually needs.** The 3D viewport is rendered by Hydra **Storm** through its OpenGL backend (**HgiGL**), which requires **OpenGL 4.5** from the GPU driver. This is standard, cross-vendor OpenGL — **not** an NVIDIA-only technology: no CUDA, no OptiX, no RTX, no vendor SDK. Any NVIDIA / AMD / Intel GPU with a reasonably current driver provides it (roughly: GPUs from ~2015 onward — NVIDIA Maxwell+, AMD GCN 1.2+, Intel Broadwell/Arc+).
+
+**Why we never ship drivers.** GPU drivers are kernel-level, vendor-owned, and must match the exact hardware — no application installs them (Nuke, Photoshop, games all require the user's own driver). What we avoid shipping is NVIDIA's *prebuilt USD binaries* (license issue) — that is unrelated to drivers.
+
+**Reality check for our audience:** Nuke itself already requires a GPU with current drivers (NVIDIA compute capability 3.5+, CUDA 12.8-class driver ≈ **571.96+ on Windows**; Foundry qualifies exact driver versions per release). Our requirement (OpenGL 4.5) is *lighter* than Nuke's — any machine that runs Nuke 16/17 can run our tool's viewport.
+
+**Degraded modes (machine without usable GPU/driver, e.g. RDP session or broken driver):**
+
+1. **First-run check:** app queries OpenGL version at startup; below 4.5 → clear dialog naming the problem and the fix ("update your GPU driver"), never a crash or a black viewport.
+2. **No-viewport mode:** our core workflow (Load → tree selection → Run) does not need rendering; the Prep panel works with the viewport hidden. `usdcut` CLI is fully headless and never touches the GPU.
+3. **Optional bundled Mesa (llvmpipe) software-OpenGL fallback** for driver-less machines: functional but slow — acceptable for small scenes, explicitly warned in-UI; decide during M0 testing whether to ship it.
+
+**Published minimum spec (installer welcome page, release notes, docs):**
+
+| Item | Minimum | Recommended |
+|---|---|---|
+| OS | Windows 10/11 64-bit (Linux x86-64 for AppImage) | — |
+| GPU | any GPU + vendor driver with **OpenGL 4.5** | modern GPU, ≥2 GB VRAM |
+| GPU driver | vendor-qualified version — table per vendor below, filled by measured qualification in M0/M4 | latest stable from vendor |
+| RAM | 8 GB | 32 GB (heavy scenes) |
+
+**Qualified driver versions** (Foundry-style: we test against specific versions and publish them — placeholders until measured):
+
+| Vendor | Minimum qualified driver (Windows) | Notes |
+|---|---|---|
+| NVIDIA | *TBD in M0 — expected ~5xx branch or newer* | any Maxwell+ GPU |
+| AMD | *TBD in M0* | Adrenalin branch |
+| Intel | *TBD in M0* | Arc/Iris driver |
+
+**Millions of polygons:** Storm on a modest current GPU handles multi-million-triangle scenes interactively; our pipeline's own prune/decimate/flatten steps reduce what reaches the viewport in the first place. Performance envelope to be measured and documented on benchmark scenes (§7).
 
 ---
 
@@ -274,11 +309,11 @@ Other dependencies: `meshoptimizer` (MIT, header-friendly), OpenImageIO for text
 
 | Milestone | Contents | Exit criteria | Est. |
 |---|---|---|---|
-| **M0 — Spike** | Build usdtweak on Windows (pixi + NVIDIA-script paths); run an addon sample; hand-test `usdcat --flatten --mask` + `usdzip` on a real CG scene; confirm Nuke 17 loads the flattened result | One real scene → one extracted prop → loads in Nuke, before/after numbers captured | 1 wk |
+| **M0 — Spike** | Build usdtweak on Windows (pixi + NVIDIA-script paths); run an addon sample; hand-test `usdcat --flatten --mask` + `usdzip` on a real CG scene; confirm Nuke 16.0 + 17 load the flattened result; **verify viewport/GL behavior on the target machine + decide Mesa fallback yes/no** | One real scene → one extracted prop → loads in Nuke, before/after numbers captured | 1 wk |
 | **M1 — Core + CLI MVP** | `usdprep-core`: Inspect, Select, Extract, Prune, Flatten, Package + Nuke preset v0 + JSON reports; `usdcut` CLI; unit + golden tests | The three CLI examples from §4.3 pass on 3 test scenes | 2–3 wk |
 | **M2 — GUI addon** | Prep panel in usdtweak: load → choose (tree/filters/viewport assist) → run → report view | A non-USD-expert TD extracts a prop without docs | 2–3 wk |
 | **M3 — Optimize & simplify** | Strip (materials/primvars/variants/metadata), Textures (convert/cap/relink), Simplify (meshoptimizer), Trim (frame range); preset v1 | ≥70% size/load-time reduction on benchmark scene (target, validated in Nuke) | 3–4 wk |
-| **M4 — Harden & ship** | Linux build, CI matrix, **single self-contained offline installer (Win, per-user) + AppImage (Linux)**, docs (short!), test matrix vs Nuke 16.0/16.1/17.x, error handling pass, v1.0 tag | Installer + AppImage, both installable/runnable **without admin or internet** on clean machines; known-issues list published | 2 wk |
+| **M4 — Harden & ship** | Linux build, CI matrix, **single self-contained offline installer (Win, per-user) + AppImage (Linux)**, docs (short!), test matrix vs Nuke 16.0/16.1/17.x, error handling pass (incl. first-run GPU/driver check), **qualified GPU-driver table measured & published**, v1.0 tag | Installer + AppImage, both installable/runnable **without admin or internet** on clean machines; known-issues list published | 2 wk |
 
 Total: **~10–13 weeks** to v1.0. M1 already delivers daily value via CLI even before any GUI exists.
 
@@ -303,6 +338,8 @@ Total: **~10–13 weeks** to v1.0. M1 already delivers daily value via CLI even 
 | OpenUSD build/packaging pain on Windows | Slowed M0/M4 | pixi/conda-forge for dev; proven `windows-build.ps1`; source build only for release |
 | NVIDIA prebuilt USD license terms | Legal if shipped | Ship only our own-built USD (conda/source) in distributed packages |
 | Nuke's Hydra quirks (textures, MaterialX) | Output not as light as hoped | M0 proves on real scenes first; env workarounds documented (e.g. `USDIMAGINGGL_ENGINE_ENABLE_SCENE_INDEX`) |
+| Target machine without working GPU drivers / RDP sessions | Viewport unusable ("HgiGL minimum OpenGL requirements not met") | First-run GL check with actionable message; no-viewport mode (core workflow renders nothing); optional Mesa llvmpipe fallback (M0 decision); `usdcut` always works headless |
+| Viewport performance on multi-million-poly scenes | Users distrust the tool | Storm handles big scenes on modest GPUs; our recipes prune/decimate before viewing; benchmark + publish measured envelope (§7) |
 | Mesh decimation damaging hero assets | Artist distrust | Opt-in only, ratio preview + report, original never touched |
 | Skeletal animation not Nuke-friendly | Some assets stay heavy | Pass-through in v1; bake-to-points scheduled as v2 spike |
 | Scope creep toward "another USD editor" | Simplicity death | §4 non-goals enforced; every feature must fit the 3-step UX or be rejected |
@@ -317,6 +354,7 @@ Total: **~10–13 weeks** to v1.0. M1 already delivers daily value via CLI even 
 4. MaterialX adoption: with the Nuke 16.0 floor, **UsdPreviewSurface is effectively decided as the default target surface** (MaterialX preview only exists from 16.1). Remaining choice: also emit an optional duplicate MtlX network for 16.1+/17 users, or skip MtlX entirely in v1?
 5. Distribution: internal-only, or shared publicly (affects licensing review of every dependency; all currently permissive).
 6. v2 candidates & priority: skeletal bake-to-points, proxy/bbox purpose generation, watch-folder automation service.
+7. GPU driver qualification: fill the per-vendor minimum driver table (§5.6) with measured versions from M0/M4 test machines; decide whether to bundle the Mesa software-GL fallback for driver-less machines.
 
 ---
 
@@ -326,4 +364,5 @@ Total: **~10–13 weeks** to v1.0. M1 already delivers daily value via CLI even 
 - OpenUSD: [releases](https://github.com/PixarAnimationStudios/OpenUSD/releases) (26.08, 2026-07-20) · [BUILDING.md](https://github.com/PixarAnimationStudios/OpenUSD/blob/dev/BUILDING.md) · [toolset](https://openusd.org/dev/toolset.html) · [products using USD](https://openusd.org/release/usd_products.html)
 - Nuke: [What's New 16.0](https://learn.foundry.com/nuke/content/release_notes/nuke_16.0.html) · [17.0 release notes](https://learn.foundry.com/nuke/17.1v1/content/release_notes/nuke_17.0.html) (USD 25.08, CY2025, new 3D system, Import Scene Graph) · [USD in classic 3D](https://learn.foundry.com/nuke/content/comp_environment/3d_compositing/usd.html) · [USD concepts, new 3D system](https://learn.foundry.com/nuke/content/comp_environment/usd-3d-comp/usd-concepts.html)
 - Packaging/build: [conda-forge openusd](https://anaconda.org/conda-forge/openusd) (win/linux/osx) · [vcpkg usd port](https://vcpkg.link/ports/usd) · [AOUSD forum on C++ USD apps](https://forum.aousd.org/t/building-a-c-application-with-usd-libraries/1899) · NVIDIA prebuilt USD binaries (via usdtweak build script; NVIDIA license terms)
+- GPU/viewport: [HdStorm docs](https://openusd.org/dev/api/hd_storm_page_front.html) · ["HgiGL minimum OpenGL requirements not met" — OpenUSD #2756](https://github.com/PixarAnimationStudios/OpenUSD/issues/2756) (OpenGL 4.5 requirement, RDP/llvmpipe pitfalls) · [Khronos: Vulkan backend for Hydra Storm](https://www.khronos.org/blog/vulkan-support-added-to-openusd-and-pixars-hydra-storm-renderer) · [Foundry system requirements (Nuke GPU/CUDA qualification)](https://www.foundry.com/products/nuke-family/requirements)
 - Alternatives: [awesome-openusd](https://github.com/matiascodesal/awesome-openusd) · [usdmanager](https://github.com/dreamworksanimation/usdmanager) · [Gaffer](https://github.com/GafferHQ/gaffer) · [meshoptimizer](https://github.com/zeux/meshoptimizer)
