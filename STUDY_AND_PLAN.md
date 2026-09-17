@@ -151,9 +151,9 @@ The tool's output preset — the definition of *done* for every operation:
 
 ### 4.1 Concept
 
-A **preparation utility**, not an editor. Two faces, one engine:
+A **preparation utility**, not an editor. Two faces, one engine — but with a clear primary: **the visual path is the product** (~99% of use): open the stage in the GUI, **pick object(s) in the 3D viewport, hit export**. The CLI is the same engine for farm/batch automation and scripting:
 
-- **GUI** (TD/artist): usdtweak + our **Prep** workflow — see §4.3.
+- **GUI** (primary): usdtweak + our **Prep** workflow — see §4.3.
 - **CLI `usdcut`** (pipeline/farm/batch): same operations, same presets, scriptable.
 
 Everything is a **recipe**: an ordered set of named operations with parameters, serializable to JSON, with the **Nuke preset** shipping as default.
