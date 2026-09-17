@@ -176,7 +176,10 @@ std::vector<SdfPath>& LastSyncedSelection() {
 }
 
 bool IsAncestorInSet(const std::set<std::string>& sel, const std::string& pathStr) {
-    for (SdfPath p(pathStr); p.GetPathElementCount() >= 1; p = p.GetParentPath()) {
+    // start at the PARENT: a prim selected itself must keep an enabled
+    // checkbox (the "inherited" state means an ancestor is selected)
+    for (SdfPath p = SdfPath(pathStr).GetParentPath(); p.GetPathElementCount() >= 1;
+         p = p.GetParentPath()) {
         if (sel.count(p.GetAsString())) return true;
     }
     return false;
