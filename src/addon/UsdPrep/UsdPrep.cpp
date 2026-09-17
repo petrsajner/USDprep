@@ -1,15 +1,20 @@
 // UsdPrep — the "prepare for Nuke" addon.
 //
 // Primary workflow (the visual path): open a stage, pick the objects to
-// export — by clicking in the viewport OR by checking them in the scene
-// tree in this panel — then hit "Export selection". usdprep-core does the
-// heavy lifting (mask -> flatten -> de-instance -> defaultPrim -> package).
+// export — by clicking in the viewport/outliner OR by checking them in the
+// scene tree in this panel — then hit "Export selection". usdprep-core
+// does the heavy lifting (mask -> flatten -> de-instance -> defaultPrim ->
+// package).
 //
-// UX rule: this panel speaks to comp artists, not USD engineers. The tree
-// shows the composed scene (what you see is what exports), technical
-// options live under "Advanced" with plain-language explanations.
+// Selection model: the editor's stage selection is the single source of
+// truth. The tree checkboxes ARE that selection (a checked node exports
+// its whole subtree); every change is applied through the editor's command
+// queue after the frame, so viewport, outliner and this panel always agree.
+//
+// UX rule: this panel speaks to comp artists, not USD engineers.
 
 #include "addons/Api.h"
+#include "Editor.h"
 #include "Gui.h"
 #include "Selection.h"
 
@@ -70,6 +75,13 @@ bool ContainsCaseInsensitive(const std::string& haystack, const std::string& nee
             return std::tolower((unsigned char)a) == std::tolower((unsigned char)b);
         });
     return it != haystack.end();
+}
+
+std::vector<SdfPath> ToSortedPaths(const std::set<std::string>& pathStrs) {
+    std::vector<SdfPath> paths;
+    paths.reserve(pathStrs.size());
+    for (const std::string& s : pathStrs) paths.emplace_back(s);
+    return paths;  // std::set iterates sorted already
 }
 
 #ifdef _WIN32
@@ -138,29 +150,11 @@ bool NativeSaveDialog(const std::string& suggestedName, bool usdz, std::string& 
 #endif  // _WIN32
 
 // ---------------------------------------------------------------------------
-// check-tree state (what will be exported)
+// selection helpers — the editor selection is the single source of truth
 // ---------------------------------------------------------------------------
 
-// Checked prim paths, stored by full path string. The export roots are the
-// checked prims without a checked ancestor; a checked node includes its
-// whole subtree — that is the contract shown to the artist.
-std::set<std::string>& CheckedPaths() {
-    static std::set<std::string> checked;
-    return checked;
-}
-
-UsdStageRefPtr& TreeStage() {
-    static UsdStageRefPtr stage;
-    return stage;
-}
-
-std::vector<SdfPath>& LastSyncedSelection() {
-    static std::vector<SdfPath> sel;
-    return sel;
-}
-
 // One-shot reveal state: tree nodes that must be forced open this frame
-// and the row to scroll to (filled when a viewport pick arrives).
+// and the row to scroll to (filled when a pick arrives from outside).
 std::set<std::string>& PendingOpen() {
     static std::set<std::string> s;
     return s;
@@ -171,40 +165,58 @@ std::string& RevealTarget() {
     return s;
 }
 
-bool IsAncestorChecked(const std::string& pathStr) {
+UsdStageRefPtr& LastStage() {
+    static UsdStageRefPtr stage;
+    return stage;
+}
+
+std::vector<SdfPath>& LastSyncedSelection() {
+    static std::vector<SdfPath> sel;
+    return sel;
+}
+
+bool IsAncestorInSet(const std::set<std::string>& sel, const std::string& pathStr) {
     for (SdfPath p(pathStr); p.GetPathElementCount() >= 1; p = p.GetParentPath()) {
-        if (CheckedPaths().count(p.GetAsString())) return true;
+        if (sel.count(p.GetAsString())) return true;
     }
     return false;
 }
 
-void SetChecked(const std::string& pathStr, bool on) {
-    auto& checked = CheckedPaths();
-    if (on) {
-        checked.insert(pathStr);
-    } else {
-        // remove the node and anything beneath it
-        const SdfPath removed(pathStr);
-        for (auto it = checked.begin(); it != checked.end();) {
-            if (*it == pathStr || SdfPath(*it).HasPrefix(removed)) {
-                it = checked.erase(it);
-            } else {
-                ++it;
+// Export roots: selected prims without a selected ancestor.
+std::vector<SdfPath> ExportRoots(const std::set<std::string>& sel) {
+    std::set<std::string> roots;
+    for (const std::string& pathStr : sel) {
+        bool covered = false;
+        for (SdfPath p = SdfPath(pathStr).GetParentPath();
+             p.GetPathElementCount() >= 1; p = p.GetParentPath()) {
+            if (sel.count(p.GetAsString())) {
+                covered = true;
+                break;
             }
         }
+        if (!covered) roots.insert(pathStr);
     }
+    return ToSortedPaths(roots);
 }
 
-// The effective export roots: checked prims with no checked ancestor.
-std::vector<SdfPath> ExportRoots() {
-    std::vector<SdfPath> roots;
-    for (const std::string& pathStr : CheckedPaths()) {
-        if (!IsAncestorChecked(pathStr)) {
-            roots.push_back(SdfPath(pathStr));
+// Apply a new selection, after the current frame finishes. Mutating editor
+// state mid-draw is not allowed — route through the command queue.
+void ApplySelectionDeferred(const UsdStageRefPtr& stage,
+                            const std::vector<SdfPath>& paths) {
+    const auto apply = [](UsdStageRefPtr, const std::vector<SdfPath>& paths) {
+        if (paths.empty()) {
+            if (Editor* editor = usdtweak::GetEditor()) {
+                // no Clear API on the addon surface yet (upstream request)
+                editor->GetSelection().Clear(usdtweak::GetCurrentStage());
+            }
+            return;
         }
-    }
-    std::sort(roots.begin(), roots.end());
-    return roots;
+        usdtweak::SetStagePathSelection(paths.front());
+        for (size_t i = 1; i < paths.size(); ++i) {
+            usdtweak::AddStagePathSelection(paths[i]);
+        }
+    };
+    ExecuteAfterDraw(apply, stage, paths);
 }
 
 std::string SuggestOutputPath(const UsdStageRefPtr& stage, const SdfPath& firstPrim) {
@@ -219,30 +231,32 @@ std::string SuggestOutputPath(const UsdStageRefPtr& stage, const SdfPath& firstP
     return dir + "/" + name + ".usdz";
 }
 
-// Mirror the check state into the editor selection so the viewport and the
-// hierarchy highlight exactly what will be exported. Routed through the
-// editor's command system (undoable), safe to call from draw.
-void SyncSelectionToRoots() {
-    const std::vector<SdfPath> roots = ExportRoots();
-    if (roots.empty()) return;
-    usdtweak::SetStagePathSelection(roots.front());
-    for (size_t i = 1; i < roots.size(); ++i) {
-        usdtweak::AddStagePathSelection(roots[i]);
-    }
-}
-
 // One row of the tree (or of the flat search result list).
-void DrawPrimRow(const UsdPrim& prim, bool flat,
-                 const std::set<std::string>& editorSelection) {
+void DrawPrimRow(const UsdPrim& prim, bool flat, const std::set<std::string>& sel,
+                 const UsdStageRefPtr& stage) {
     const std::string pathStr = prim.GetPath().GetAsString();
 
     ImGui::PushID(pathStr.c_str());
-    const bool inherited = IsAncestorChecked(pathStr);
-    bool checked = inherited || CheckedPaths().count(pathStr) > 0;
+    const bool inherited = IsAncestorInSet(sel, pathStr);
+    const bool selected = sel.count(pathStr) > 0;
+    bool checked = inherited || selected;
     if (inherited) ImGui::BeginDisabled();
     if (ImGui::Checkbox("##inc", &checked)) {
-        SetChecked(pathStr, checked);
-        SyncSelectionToRoots();
+        if (checked) {
+            // add this prim on top of the current export roots
+            std::set<std::string> next(sel.begin(), sel.end());
+            next.insert(pathStr);
+            // drop descendants that are now covered anyway (cosmetic)
+            ApplySelectionDeferred(stage, ToSortedPaths(next));
+        } else {
+            // remove this prim and everything beneath it
+            const SdfPath removed(pathStr);
+            std::set<std::string> next;
+            for (const std::string& candidate : sel) {
+                if (!SdfPath(candidate).HasPrefix(removed)) next.insert(candidate);
+            }
+            ApplySelectionDeferred(stage, ToSortedPaths(next));
+        }
     }
     if (inherited) ImGui::EndDisabled();
     if (ImGui::IsItemHovered()) {
@@ -260,7 +274,7 @@ void DrawPrimRow(const UsdPrim& prim, bool flat,
     if (children.empty()) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }
-    if (editorSelection.count(pathStr)) {
+    if (selected || inherited) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
     if (!flat && PendingOpen().count(pathStr)) {
@@ -278,7 +292,7 @@ void DrawPrimRow(const UsdPrim& prim, bool flat,
     }
     if (open) {
         for (const UsdPrim& child : children) {
-            DrawPrimRow(child, flat, editorSelection);
+            DrawPrimRow(child, flat, sel, stage);
         }
         ImGui::TreePop();
     }
@@ -292,44 +306,41 @@ void DrawPrepAddon() {
         return;
     }
 
-    // Reset the check state when a different stage comes in.
-    if (TreeStage() != stage) {
-        TreeStage() = stage;
-        CheckedPaths().clear();
+    if (LastStage() != stage) {
+        LastStage() = stage;
         LastSyncedSelection().clear();
+        PendingOpen().clear();
+        RevealTarget().clear();
     }
 
-    // Viewport/hierarchy clicks flow into the check state and reveal the
-    // picked object in the tree (expand ancestors + scroll to it).
+    // The selection IS the check state. Normalize to prim paths.
     const std::vector<SdfPath> selection = usdtweak::GetSelection().GetSelectedPaths(stage);
+    std::set<std::string> sel;
+    for (const SdfPath& p : selection) {
+        const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
+        if (prim.IsPrimPath() && !prim.IsAbsoluteRootPath()) {
+            sel.insert(prim.GetAsString());
+        }
+    }
+
+    // Reveal newly picked objects in the tree (expand + scroll), one-shot.
     if (selection != LastSyncedSelection()) {
         for (const SdfPath& p : selection) {
-            // only react to prims we have not already taken over
-            const bool known =
-                std::find(LastSyncedSelection().begin(), LastSyncedSelection().end(), p) !=
-                LastSyncedSelection().end();
+            const bool known = std::find(LastSyncedSelection().begin(),
+                                         LastSyncedSelection().end(), p) !=
+                               LastSyncedSelection().end();
+            if (known) continue;
             const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
             if (!prim.IsPrimPath() || prim.IsAbsoluteRootPath()) continue;
-            CheckedPaths().insert(prim.GetAsString());
-            if (!known) {
-                for (SdfPath a = prim; a.GetPathElementCount() >= 1;
-                     a = a.GetParentPath()) {
-                    PendingOpen().insert(a.GetAsString());
-                }
-                RevealTarget() = prim.GetAsString();
+            for (SdfPath a = prim; a.GetPathElementCount() >= 1; a = a.GetParentPath()) {
+                PendingOpen().insert(a.GetAsString());
             }
+            RevealTarget() = prim.GetAsString();
         }
         LastSyncedSelection() = selection;
     }
 
-    const std::vector<SdfPath> roots = ExportRoots();
-    std::set<std::string> editorSelection;
-    for (const SdfPath& p : selection) {
-        const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
-        if (prim.IsPrimPath() && !prim.IsAbsoluteRootPath()) {
-            editorSelection.insert(prim.GetAsString());
-        }
-    }
+    const std::vector<SdfPath> roots = ExportRoots(sel);
 
     // ----- what gets exported: scene tree with checkboxes ---------------
     ImGui::Text("Objects to export: %d", static_cast<int>(roots.size()));
@@ -349,23 +360,22 @@ void DrawPrepAddon() {
     ImGui::InputTextWithHint("##filter", "Search objects...", filter, sizeof(filter));
     ImGui::SameLine();
     if (ImGui::Button("Clear##clearSel")) {
-        CheckedPaths().clear();
+        ApplySelectionDeferred(stage, {});
     }
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Uncheck everything.");
+        ImGui::SetTooltip("Deselect everything (same as clicking empty space\nin the 3D view).");
     }
 
     ImGui::BeginChild("tree", ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 10.0f),
                       ImGuiChildFlags_ResizeY | ImGuiChildFlags_Borders);
     if (filter[0] != '\0') {
-        // Flat search over the composed scene.
         size_t shown = 0;
         for (const UsdPrim& prim :
              UsdPrimRange(stage->GetPseudoRoot(),
                           UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
             if (prim.IsPseudoRoot()) continue;
             if (ContainsCaseInsensitive(prim.GetName(), filter)) {
-                DrawPrimRow(prim, /*flat=*/true, editorSelection);
+                DrawPrimRow(prim, /*flat=*/true, sel, stage);
                 if (++shown >= 200) {
                     ImGui::TextDisabled("... more than 200 matches, keep typing");
                     break;
@@ -377,7 +387,7 @@ void DrawPrepAddon() {
         }
     } else {
         for (const UsdPrim& child : stage->GetPseudoRoot().GetAllChildren()) {
-            DrawPrimRow(child, /*flat=*/false, editorSelection);
+            DrawPrimRow(child, /*flat=*/false, sel, stage);
         }
     }
     ImGui::EndChild();
@@ -430,7 +440,6 @@ void DrawPrepAddon() {
             "Layer (.usdc): geometry and materials only; texture files stay\n"
             "where they are (paths are not adjusted yet).");
     }
-    // Keep the extension of the output path in sync with the format choice.
     if (outputPath[0] != '\0') {
         const std::string synced =
             WithExtension(outputPath, format == 0 ? ".usdz" : ".usdc");
@@ -492,7 +501,8 @@ void DrawPrepAddon() {
     }
     if (!canExport) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && !canExport) {
-        ImGui::SetTooltip("Check at least one object in the tree above\n(or click objects in the 3D view).");
+        ImGui::SetTooltip(
+            "Check at least one object in the tree above\n(or click objects in the 3D view).");
     }
 
     if (!lastReport.empty()) {
