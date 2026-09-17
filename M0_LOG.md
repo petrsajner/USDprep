@@ -107,7 +107,7 @@ usdzip --asset alab_projector.usdc alab_projector_asset.usdz                    
 | Test scenes | ✅ Kitchen Set, ALab + techvars + cameras, usd-wg/assets |
 | mask→flatten→usdc→usdz pipeline | ✅ on both scenes, materials/UDIM textures survive |
 | Addon mechanism understood | ✅ (doc/Addons.md) |
-| Nuke 16.0 + 17 load test | ✅ **user confirmed: Nuke loaded and displayed both extracted assets (2026-09-17)** |
+| Nuke 16.0 + 17 load test | ✅ **user confirmed: Nuke 17 loaded and displayed both extracted assets (2026-09-17)**. Nuke 16.0 not installed locally — floor validation deferred (install Nuke Non-commercial 16 when needed, latest by the M4 test matrix) |
 | Mesa fallback decision | ✅ not needed on dev machine (RTX 5090); revisit for release |
 
 **→ M0 exit criteria met: real scene → extracted prop → loads in Nuke, before/after numbers captured (2.7 MB → 33 KB usdz; ALab assembly → 4.8 MB usdz with UDIM textures). M0 COMPLETE.**
