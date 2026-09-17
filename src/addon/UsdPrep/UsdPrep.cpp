@@ -159,6 +159,18 @@ std::vector<SdfPath>& LastSyncedSelection() {
     return sel;
 }
 
+// One-shot reveal state: tree nodes that must be forced open this frame
+// and the row to scroll to (filled when a viewport pick arrives).
+std::set<std::string>& PendingOpen() {
+    static std::set<std::string> s;
+    return s;
+}
+
+std::string& RevealTarget() {
+    static std::string s;
+    return s;
+}
+
 bool IsAncestorChecked(const std::string& pathStr) {
     for (SdfPath p(pathStr); p.GetPathElementCount() >= 1; p = p.GetParentPath()) {
         if (CheckedPaths().count(p.GetAsString())) return true;
@@ -207,8 +219,21 @@ std::string SuggestOutputPath(const UsdStageRefPtr& stage, const SdfPath& firstP
     return dir + "/" + name + ".usdz";
 }
 
+// Mirror the check state into the editor selection so the viewport and the
+// hierarchy highlight exactly what will be exported. Routed through the
+// editor's command system (undoable), safe to call from draw.
+void SyncSelectionToRoots() {
+    const std::vector<SdfPath> roots = ExportRoots();
+    if (roots.empty()) return;
+    usdtweak::SetStagePathSelection(roots.front());
+    for (size_t i = 1; i < roots.size(); ++i) {
+        usdtweak::AddStagePathSelection(roots[i]);
+    }
+}
+
 // One row of the tree (or of the flat search result list).
-void DrawPrimRow(const UsdPrim& prim, bool flat) {
+void DrawPrimRow(const UsdPrim& prim, bool flat,
+                 const std::set<std::string>& editorSelection) {
     const std::string pathStr = prim.GetPath().GetAsString();
 
     ImGui::PushID(pathStr.c_str());
@@ -217,6 +242,7 @@ void DrawPrimRow(const UsdPrim& prim, bool flat) {
     if (inherited) ImGui::BeginDisabled();
     if (ImGui::Checkbox("##inc", &checked)) {
         SetChecked(pathStr, checked);
+        SyncSelectionToRoots();
     }
     if (inherited) ImGui::EndDisabled();
     if (ImGui::IsItemHovered()) {
@@ -229,13 +255,22 @@ void DrawPrimRow(const UsdPrim& prim, bool flat) {
         const auto siblings = prim.GetAllChildren();
         children.assign(siblings.begin(), siblings.end());
     }
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
-                               ImGuiTreeNodeFlags_SpanFullWidth;
+    ImGuiTreeNodeFlags flags =
+        ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth;
     if (children.empty()) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }
+    if (editorSelection.count(pathStr)) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+    if (!flat && PendingOpen().count(pathStr)) {
+        ImGui::SetNextItemOpen(true);
+    }
     const bool open =
         ImGui::TreeNodeEx(prim.GetName().GetString().c_str(), flags) && !children.empty();
+    if (pathStr == RevealTarget()) {
+        ImGui::SetScrollHereY(0.25f);
+    }
     ImGui::SameLine();
     const std::string typeName = prim.GetTypeName().GetString();
     if (!typeName.empty()) {
@@ -243,7 +278,7 @@ void DrawPrimRow(const UsdPrim& prim, bool flat) {
     }
     if (open) {
         for (const UsdPrim& child : children) {
-            DrawPrimRow(child, flat);
+            DrawPrimRow(child, flat, editorSelection);
         }
         ImGui::TreePop();
     }
@@ -264,20 +299,37 @@ void DrawPrepAddon() {
         LastSyncedSelection().clear();
     }
 
-    // Viewport/hierarchy clicks flow into the check state (one-way sync:
-    // clicking selects+checks; unchecking here does not touch the editor).
+    // Viewport/hierarchy clicks flow into the check state and reveal the
+    // picked object in the tree (expand ancestors + scroll to it).
     const std::vector<SdfPath> selection = usdtweak::GetSelection().GetSelectedPaths(stage);
     if (selection != LastSyncedSelection()) {
         for (const SdfPath& p : selection) {
+            // only react to prims we have not already taken over
+            const bool known =
+                std::find(LastSyncedSelection().begin(), LastSyncedSelection().end(), p) !=
+                LastSyncedSelection().end();
             const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
-            if (prim.IsPrimPath() && !prim.IsAbsoluteRootPath()) {
-                CheckedPaths().insert(prim.GetAsString());
+            if (!prim.IsPrimPath() || prim.IsAbsoluteRootPath()) continue;
+            CheckedPaths().insert(prim.GetAsString());
+            if (!known) {
+                for (SdfPath a = prim; a.GetPathElementCount() >= 1;
+                     a = a.GetParentPath()) {
+                    PendingOpen().insert(a.GetAsString());
+                }
+                RevealTarget() = prim.GetAsString();
             }
         }
         LastSyncedSelection() = selection;
     }
 
     const std::vector<SdfPath> roots = ExportRoots();
+    std::set<std::string> editorSelection;
+    for (const SdfPath& p : selection) {
+        const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
+        if (prim.IsPrimPath() && !prim.IsAbsoluteRootPath()) {
+            editorSelection.insert(prim.GetAsString());
+        }
+    }
 
     // ----- what gets exported: scene tree with checkboxes ---------------
     ImGui::Text("Objects to export: %d", static_cast<int>(roots.size()));
@@ -313,7 +365,7 @@ void DrawPrepAddon() {
                           UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
             if (prim.IsPseudoRoot()) continue;
             if (ContainsCaseInsensitive(prim.GetName(), filter)) {
-                DrawPrimRow(prim, /*flat=*/true);
+                DrawPrimRow(prim, /*flat=*/true, editorSelection);
                 if (++shown >= 200) {
                     ImGui::TextDisabled("... more than 200 matches, keep typing");
                     break;
@@ -325,10 +377,13 @@ void DrawPrepAddon() {
         }
     } else {
         for (const UsdPrim& child : stage->GetPseudoRoot().GetAllChildren()) {
-            DrawPrimRow(child, /*flat=*/false);
+            DrawPrimRow(child, /*flat=*/false, editorSelection);
         }
     }
     ImGui::EndChild();
+    // The reveal was applied this frame — one-shot.
+    PendingOpen().clear();
+    RevealTarget().clear();
 
     ImGui::Separator();
 
