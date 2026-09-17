@@ -1,0 +1,19 @@
+add_library(usdprep-testutil INTERFACE)
+target_compile_definitions(usdprep-testutil INTERFACE
+    FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_link_libraries(usdprep-testutil INTERFACE usdprep::core)
+
+function(usdprep_add_test name)
+    add_executable(${name} ${name}.cpp)
+    target_link_libraries(${name} PRIVATE usdprep-testutil)
+    if(MSVC)
+        target_compile_options(${name} PRIVATE /wd4244 /wd4305 /wd4996)
+        target_compile_definitions(${name} PRIVATE NOMINMAX)
+    endif()
+    target_compile_definitions(${name} PRIVATE TBB_SUPPRESS_DEPRECATED_MESSAGES)
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+usdprep_add_test(test_inspect)
+usdprep_add_test(test_extract)
+usdprep_add_test(test_prune)
