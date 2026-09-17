@@ -20,3 +20,7 @@ usdtweak_add_addon(UsdPrep
 # (non-keyword) form of target_link_libraries everywhere, and mixing the
 # two signatures on one target is a CMake error.
 target_link_libraries(usdtweak usdprep::core)
+if(WIN32)
+    # IFileSaveDialog (native "Save as..." in the addon)
+    target_link_libraries(usdtweak ole32)
+endif()
