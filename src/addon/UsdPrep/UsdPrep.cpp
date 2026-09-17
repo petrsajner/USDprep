@@ -1,13 +1,13 @@
 // UsdPrep — the "prepare for Nuke" addon.
 //
-// Primary workflow (the visual path): open a stage, pick one or more
-// objects in the viewport or hierarchy, hit "Export selection", get a
-// standalone flattened .usdz/.usdc with de-instancing, defaultPrim and
-// localized textures. All heavy lifting lives in usdprep-core; this addon
-// is only the panel.
+// Primary workflow (the visual path): open a stage, pick the objects to
+// export — by clicking in the viewport OR by checking them in the scene
+// tree in this panel — then hit "Export selection". usdprep-core does the
+// heavy lifting (mask -> flatten -> de-instance -> defaultPrim -> package).
 //
-// UX rule: this panel speaks to comp artists, not USD engineers. Technical
-// options live under "Advanced" and are explained in plain language.
+// UX rule: this panel speaks to comp artists, not USD engineers. The tree
+// shows the composed scene (what you see is what exports), technical
+// options live under "Advanced" with plain-language explanations.
 
 #include "addons/Api.h"
 #include "Gui.h"
@@ -15,9 +15,14 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <cstdio>
+#include <set>
 #include <string>
 #include <vector>
+
+#include <pxr/usd/usd/primFlags.h>
+#include <pxr/usd/usd/primRange.h>
 
 #include <usdprep/Extract.h>
 
@@ -31,7 +36,7 @@ namespace {
 constexpr const char* kAddonId = "UsdPrep";
 
 // ---------------------------------------------------------------------------
-// small path helpers
+// small path/string helpers
 // ---------------------------------------------------------------------------
 
 std::string DirectoryOf(const std::string& path) {
@@ -55,6 +60,16 @@ std::string WithExtension(const std::string& path, const char* ext) {
     std::string p = path;
     if (HasUsdExtension(p)) p.resize(p.size() - 5);
     return p + ext;
+}
+
+bool ContainsCaseInsensitive(const std::string& haystack, const std::string& needle) {
+    if (needle.empty()) return true;
+    const auto it = std::search(
+        haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+        [](char a, char b) {
+            return std::tolower((unsigned char)a) == std::tolower((unsigned char)b);
+        });
+    return it != haystack.end();
 }
 
 #ifdef _WIN32
@@ -123,8 +138,62 @@ bool NativeSaveDialog(const std::string& suggestedName, bool usdz, std::string& 
 #endif  // _WIN32
 
 // ---------------------------------------------------------------------------
-// the panel
+// check-tree state (what will be exported)
 // ---------------------------------------------------------------------------
+
+// Checked prim paths, stored by full path string. The export roots are the
+// checked prims without a checked ancestor; a checked node includes its
+// whole subtree — that is the contract shown to the artist.
+std::set<std::string>& CheckedPaths() {
+    static std::set<std::string> checked;
+    return checked;
+}
+
+UsdStageRefPtr& TreeStage() {
+    static UsdStageRefPtr stage;
+    return stage;
+}
+
+std::vector<SdfPath>& LastSyncedSelection() {
+    static std::vector<SdfPath> sel;
+    return sel;
+}
+
+bool IsAncestorChecked(const std::string& pathStr) {
+    for (SdfPath p(pathStr); p.GetPathElementCount() >= 1; p = p.GetParentPath()) {
+        if (CheckedPaths().count(p.GetAsString())) return true;
+    }
+    return false;
+}
+
+void SetChecked(const std::string& pathStr, bool on) {
+    auto& checked = CheckedPaths();
+    if (on) {
+        checked.insert(pathStr);
+    } else {
+        // remove the node and anything beneath it
+        const SdfPath removed(pathStr);
+        for (auto it = checked.begin(); it != checked.end();) {
+            if (*it == pathStr || SdfPath(*it).HasPrefix(removed)) {
+                it = checked.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
+// The effective export roots: checked prims with no checked ancestor.
+std::vector<SdfPath> ExportRoots() {
+    std::vector<SdfPath> roots;
+    for (const std::string& pathStr : CheckedPaths()) {
+        if (!IsAncestorChecked(pathStr)) {
+            roots.push_back(SdfPath(pathStr));
+        }
+    }
+    std::sort(roots.begin(), roots.end());
+    return roots;
+}
 
 std::string SuggestOutputPath(const UsdStageRefPtr& stage, const SdfPath& firstPrim) {
     std::string dir = usdtweak::GetAddonString(kAddonId, "lastDir", "");
@@ -133,10 +202,52 @@ std::string SuggestOutputPath(const UsdStageRefPtr& stage, const SdfPath& firstP
         if (!realPath.empty()) dir = DirectoryOf(realPath);
     }
     if (dir.empty()) dir = ".";
-    std::string name = firstPrim.IsEmpty() ? std::string("asset")
-                                           : firstPrim.GetName();
+    std::string name = firstPrim.IsEmpty() ? std::string("asset") : firstPrim.GetName();
     if (name.empty()) name = "asset";
     return dir + "/" + name + ".usdz";
+}
+
+// One row of the tree (or of the flat search result list).
+void DrawPrimRow(const UsdPrim& prim, bool flat) {
+    const std::string pathStr = prim.GetPath().GetAsString();
+
+    ImGui::PushID(pathStr.c_str());
+    const bool inherited = IsAncestorChecked(pathStr);
+    bool checked = inherited || CheckedPaths().count(pathStr) > 0;
+    if (inherited) ImGui::BeginDisabled();
+    if (ImGui::Checkbox("##inc", &checked)) {
+        SetChecked(pathStr, checked);
+    }
+    if (inherited) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", pathStr.c_str());
+    }
+
+    ImGui::SameLine();
+    std::vector<UsdPrim> children;
+    if (!flat) {
+        const auto siblings = prim.GetAllChildren();
+        children.assign(siblings.begin(), siblings.end());
+    }
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+                               ImGuiTreeNodeFlags_SpanFullWidth;
+    if (children.empty()) {
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+    const bool open =
+        ImGui::TreeNodeEx(prim.GetName().GetString().c_str(), flags) && !children.empty();
+    ImGui::SameLine();
+    const std::string typeName = prim.GetTypeName().GetString();
+    if (!typeName.empty()) {
+        ImGui::TextDisabled("%s", typeName.c_str());
+    }
+    if (open) {
+        for (const UsdPrim& child : children) {
+            DrawPrimRow(child, flat);
+        }
+        ImGui::TreePop();
+    }
+    ImGui::PopID();
 }
 
 void DrawPrepAddon() {
@@ -146,40 +257,85 @@ void DrawPrepAddon() {
         return;
     }
 
-    // Gather the stage selection, collapsed to prim paths (viewport picks
-    // can carry property paths).
-    std::vector<SdfPath> primPaths;
-    for (const SdfPath& p : usdtweak::GetSelection().GetSelectedPaths(stage)) {
-        const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
-        if (prim.IsPrimPath() && !prim.IsAbsoluteRootPath() &&
-            std::find(primPaths.begin(), primPaths.end(), prim) == primPaths.end()) {
-            primPaths.push_back(prim);
-        }
+    // Reset the check state when a different stage comes in.
+    if (TreeStage() != stage) {
+        TreeStage() = stage;
+        CheckedPaths().clear();
+        LastSyncedSelection().clear();
     }
 
-    // ----- what gets exported: the objects, one per line -------------
-    ImGui::Text("Exporting %d object(s):", static_cast<int>(primPaths.size()));
-    if (primPaths.empty()) {
-        ImGui::TextDisabled("    (nothing selected — click objects in the 3D view)");
-    } else {
-        ImGui::BeginChild("selection",
-                          ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 6.0f),
-                          ImGuiChildFlags_ResizeY | ImGuiChildFlags_Borders);
-        for (const SdfPath& p : primPaths) {
-            ImGui::Bullet();
-            ImGui::TextUnformatted(p.GetName().c_str());
-            ImGui::SameLine(180.0f);
-            ImGui::TextDisabled("%s", p.GetAsString().c_str());
+    // Viewport/hierarchy clicks flow into the check state (one-way sync:
+    // clicking selects+checks; unchecking here does not touch the editor).
+    const std::vector<SdfPath> selection = usdtweak::GetSelection().GetSelectedPaths(stage);
+    if (selection != LastSyncedSelection()) {
+        for (const SdfPath& p : selection) {
+            const SdfPath prim = p.IsPrimPath() ? p : p.GetPrimPath();
+            if (prim.IsPrimPath() && !prim.IsAbsoluteRootPath()) {
+                CheckedPaths().insert(prim.GetAsString());
+            }
         }
-        ImGui::EndChild();
+        LastSyncedSelection() = selection;
     }
+
+    const std::vector<SdfPath> roots = ExportRoots();
+
+    // ----- what gets exported: scene tree with checkboxes ---------------
+    ImGui::Text("Objects to export: %d", static_cast<int>(roots.size()));
+    if (!roots.empty() && ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        const size_t shown = std::min<size_t>(roots.size(), 12);
+        for (size_t i = 0; i < shown; ++i) {
+            ImGui::BulletText("%s", roots[i].GetAsString().c_str());
+        }
+        if (roots.size() > shown) {
+            ImGui::Text("... and %d more", static_cast<int>(roots.size() - shown));
+        }
+        ImGui::EndTooltip();
+    }
+
+    static char filter[128] = "";
+    ImGui::InputTextWithHint("##filter", "Search objects...", filter, sizeof(filter));
+    ImGui::SameLine();
+    if (ImGui::Button("Clear##clearSel")) {
+        CheckedPaths().clear();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Uncheck everything.");
+    }
+
+    ImGui::BeginChild("tree", ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 10.0f),
+                      ImGuiChildFlags_ResizeY | ImGuiChildFlags_Borders);
+    if (filter[0] != '\0') {
+        // Flat search over the composed scene.
+        size_t shown = 0;
+        for (const UsdPrim& prim :
+             UsdPrimRange(stage->GetPseudoRoot(),
+                          UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
+            if (prim.IsPseudoRoot()) continue;
+            if (ContainsCaseInsensitive(prim.GetName(), filter)) {
+                DrawPrimRow(prim, /*flat=*/true);
+                if (++shown >= 200) {
+                    ImGui::TextDisabled("... more than 200 matches, keep typing");
+                    break;
+                }
+            }
+        }
+        if (shown == 0) {
+            ImGui::TextDisabled("    (no objects match '%s')", filter);
+        }
+    } else {
+        for (const UsdPrim& child : stage->GetPseudoRoot().GetAllChildren()) {
+            DrawPrimRow(child, /*flat=*/false);
+        }
+    }
+    ImGui::EndChild();
 
     ImGui::Separator();
 
     // ----- where it goes: path + native save dialog -------------------
     static char outputPath[512] = "";
-    if (outputPath[0] == '\0' && !primPaths.empty()) {
-        const std::string suggested = SuggestOutputPath(stage, primPaths.front());
+    if (outputPath[0] == '\0' && !roots.empty()) {
+        const std::string suggested = SuggestOutputPath(stage, roots.front());
         std::snprintf(outputPath, sizeof(outputPath), "%s", suggested.c_str());
     }
 
@@ -197,16 +353,16 @@ void DrawPrepAddon() {
     if (ImGui::Button("Browse...")) {
         std::string chosen;
         const std::string current(outputPath);
-        const std::string suggestion = HasUsdExtension(current)
-                                           ? BasenameOf(current)
-                                           : BasenameOf(current) + (format == 0 ? ".usdz" : ".usdc");
+        const std::string suggestion =
+            HasUsdExtension(current)
+                ? BasenameOf(current)
+                : BasenameOf(current) + std::string(format == 0 ? ".usdz" : ".usdc");
         if (NativeSaveDialog(suggestion, format == 0, chosen)) {
             std::snprintf(outputPath, sizeof(outputPath), "%s", chosen.c_str());
-            if (chosen.size() > 5 && chosen.compare(chosen.size() - 5, 5, ".usdz") != 0) {
-                format = 1;  // user picked a .usdc (or other) name in the dialog
-            } else {
-                format = 0;
-            }
+            format = (chosen.size() > 5 &&
+                      chosen.compare(chosen.size() - 5, 5, ".usdz") != 0)
+                         ? 1
+                         : 0;
         }
     }
 #endif
@@ -251,12 +407,12 @@ void DrawPrepAddon() {
 
     // ----- run ---------------------------------------------------------
     static std::string lastReport;
-    const bool canExport = !primPaths.empty() && outputPath[0] != '\0';
+    const bool canExport = !roots.empty() && outputPath[0] != '\0';
     if (!canExport) ImGui::BeginDisabled();
     if (ImGui::Button("Export selection", ImVec2(-1.0f, 0.0f))) {
         usdprep::ExtractOptions options;
-        options.primPaths.reserve(primPaths.size());
-        for (const SdfPath& p : primPaths) {
+        options.primPaths.reserve(roots.size());
+        for (const SdfPath& p : roots) {
             options.primPaths.push_back(p.GetAsString());
         }
         options.outputPath = outputPath;
@@ -280,6 +436,9 @@ void DrawPrepAddon() {
         }
     }
     if (!canExport) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered() && !canExport) {
+        ImGui::SetTooltip("Check at least one object in the tree above\n(or click objects in the 3D view).");
+    }
 
     if (!lastReport.empty()) {
         ImGui::Separator();
