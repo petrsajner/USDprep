@@ -2,3 +2,17 @@ testdata/
 third_party/
 build/
 *.log
+
+# usdtweak writes its window layout wherever it is launched from
+imgui.ini
+
+# stray exports and hand-run test outputs land in the repo root;
+# fixtures live under tests/data and are not matched by these
+/*.usd
+/*.usda
+/*.usdc
+/*.usdz
+/*_textures/
+
+# scratch folder of an interrupted run (removed on success)
+.usdprep-tmp-*/
