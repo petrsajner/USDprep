@@ -38,14 +38,36 @@ objects, 54 meshes, 210 KB" with the report behind "Details".
   `SetNextItemOpen(false)` on the target, `SetScrollHereY(0.5)` on the
   target row, all one-shot in the frame the change is observed.
 
+## Slice 2 (2026-09-20): smart pick, ALab
+
+- **Smart pick.** A click on a mesh in 3D selects the object it belongs
+  to: the nearest ancestor whose `kind` is a model (the component; an
+  assembly where no component exists). Both Kitchen_set and ALab mark
+  their artist-level objects `component`. A scene without kinds gives
+  the mesh itself, and ↑ takes it from there. Done in the panel, not by
+  switching the viewport's own pick mode, because that mode selects the
+  pseudo-root on a scene without kinds.
+- **Deselecting a row takes everything under it along**, ctrl+clicked
+  children included. The rest of the selection stays.
+- **ALab (47,401 prims):** loads, 60 FPS, search narrows instantly,
+  a 3D click on the stoat lands on `stoat/outfit_M_hrc`; export of that
+  component from the panel: 1.3 s, 91 MB usdz, 12 UDIM tiles inside.
+- **A missing texture no longer sinks the export.** ALab's texture pack
+  is not installed here, and USD's packager and localizer both give up
+  on the first dependency they cannot find. Dead references are now
+  taken out of the flattened layer and named in the report
+  ("1 texture file(s) are not on this machine and were left out:
+  stoat_outfit01.<UDIM>.exr"); fixture `missing_textures.usda` and a
+  test pin it.
+- usdtweak switches its content browser on every time a stage is
+  opened; simple mode flips it back when the flag turns on in the same
+  frame the stage changes, and leaves a Windows-menu choice alone.
+
 ## Decisions taken along the way
 
-- Viewport picking stays in **Prim** mode. Model mode would give an
-  artist the whole asset on one click, but on a scene without `kind`
-  metadata it climbs to the pseudo-root and selects nothing — ↑ does the
-  same job safely.
-- Plain click on a selected row deselects only that row; the others
-  stay. The plain click only ever replaces the selection on the way in.
+- Plain click on a selected row deselects that row and everything under
+  it; the others stay. The plain click only ever replaces the selection
+  on the way in.
 - The revealed object stays folded even if the user had opened it
   before — the spec said so, and it keeps a 3D pick from unfolding a
   hundred meshes.
@@ -55,5 +77,7 @@ objects, 54 meshes, 210 KB" with the report behind "Details".
 - Level 3 formats (OBJ own writer; Alembic needs our own USD build with
   usdAbc; FBX undecided) — see the design doc.
 - Type size is fixed at 1.3×; a setting can come when someone asks.
-- The panel has not been tried on ALab (47k prims) yet — the tree draws
-  only unfolded rows, the search walks the whole stage per keystroke.
+- USD's own warnings (the localizer's "failed to resolve" noise, and
+  anything real hiding in it) still go to the console, not into the
+  report's Details. A coalescing diagnostic delegate around the run
+  would bring them in.

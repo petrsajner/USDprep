@@ -9,7 +9,10 @@
 
 #include <pxr/usd/sdf/assetPath.h>
 #include <pxr/base/tf/pathUtils.h>
+#include <pxr/usd/ar/resolvedPath.h>
+#include <pxr/usd/ar/resolver.h>
 #include <pxr/usd/sdf/layer.h>
+#include <pxr/usd/sdf/layerUtils.h>
 #include <pxr/usd/sdf/path.h>
 #include <pxr/usd/sdf/propertySpec.h>
 #include <pxr/usd/sdf/schema.h>
@@ -21,6 +24,7 @@
 #include <pxr/usd/usd/primFlags.h>
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
+#include <pxr/usd/usdShade/udimUtils.h>
 #include <pxr/usd/usdUtils/dependencies.h>
 #include <pxr/usd/usdUtils/localizeAsset.h>
 #include <pxr/usd/usdUtils/usdzPackage.h>
@@ -203,6 +207,41 @@ inline size_t AnchorUnresolvedAssetPaths(const UsdStageRefPtr& stage) {
     return anchored;
 }
 
+// A texture that is not on this machine must not sink the whole export:
+// USD's packager and localizer both give up on the first dependency they
+// cannot find. Such references are dead anyway, so they are taken out of
+// the flattened layer and named in the report, and the export goes on
+// with everything that does exist.
+inline void DropMissingDependencies(Report& rep, const std::string& tmpPath) {
+    const SdfLayerRefPtr layer = SdfLayer::FindOrOpen(tmpPath);
+    if (!layer) return;
+    std::vector<std::string> missing;
+    UsdUtilsModifyAssetPaths(layer, [&](const std::string& assetPath) -> std::string {
+        if (assetPath.empty()) return assetPath;
+        bool exists;
+        if (UsdShadeUdimUtils::IsUdimIdentifier(assetPath)) {
+            exists = !UsdShadeUdimUtils::ResolveUdimTilePaths(assetPath, layer).empty();
+        } else {
+            exists = !ArGetResolver()
+                          .Resolve(SdfComputeAssetPathRelativeToLayer(layer, assetPath))
+                          .IsEmpty();
+        }
+        if (exists) return assetPath;
+        missing.push_back(assetPath);
+        return std::string();
+    });
+    if (missing.empty()) return;
+    layer->Save();
+    std::string names;
+    for (size_t i = 0; i < missing.size() && i < 3; ++i) {
+        names += (i == 0 ? "" : ", ") + std::filesystem::path(missing[i]).filename().string();
+    }
+    if (missing.size() > 3) names += ", ...";
+    rep.Warn("textures", std::to_string(missing.size()) +
+                             " texture file(s) are not on this machine and were left out: " +
+                             names);
+}
+
 // Copy every external dependency (textures, including whole UDIM tile
 // sets) next to the output and rewrite the asset paths to point there —
 // the .usdc/.usda counterpart of what .usdz packaging does. Without this
@@ -290,6 +329,8 @@ inline void FinalizeOutput(Report& rep, const std::string& outputPath,
                            const std::string& tmpPath, bool relinkTextures) {
     namespace fs = std::filesystem;
     std::error_code ec;
+
+    DropMissingDependencies(rep, tmpPath);
 
     if (HasExtension(outputPath, ".usdz")) {
         if (!UsdUtilsCreateNewUsdzPackage(SdfAssetPath(tmpPath), outputPath)) {

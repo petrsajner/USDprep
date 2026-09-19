@@ -8,6 +8,8 @@
 #include "Gui.h"
 #include "Selection.h"
 
+#include <pxr/usd/kind/registry.h>
+#include <pxr/usd/usd/modelAPI.h>
 #include <pxr/usd/usd/primFlags.h>
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
@@ -15,6 +17,23 @@
 namespace usdprep_addon {
 
 namespace {
+
+// A click on a mesh in 3D means the object it belongs to: the nearest
+// ancestor (the prim itself included) that the scene marks as a model
+// with the `kind` metadata - the component in a production scene, an
+// assembly where no component exists. A scene without kinds gives the
+// mesh itself, and the arrow keys take it from there.
+SdfPath ObjectFor(const UsdStageRefPtr& stage, const SdfPath& path) {
+    const KindRegistry& kinds = KindRegistry::GetInstance();
+    for (UsdPrim prim = stage->GetPrimAtPath(path); prim && !prim.IsPseudoRoot();
+         prim = prim.GetParent()) {
+        TfToken kind;
+        if (UsdModelAPI(prim).GetKind(&kind) && kinds.IsA(kind, KindTokens->model)) {
+            return prim.GetPath();
+        }
+    }
+    return path;
+}
 
 // Selected: unmistakable. Underneath a selected object: still yellow, so
 // "and everything under it" is seen rather than assumed.
@@ -112,18 +131,26 @@ void SceneTree::ObserveSelection(const UsdStageRefPtr& stage) {
     const std::vector<SdfPath> now = SelectedPrimPaths(stage);
     if (now != _lastSeen) {
         // A change we did not make ourselves came from the 3D view (or
-        // another panel): show where it landed.
+        // another panel): lift what was picked to the object it belongs
+        // to, then show where it landed.
         if (now != _lastApplied) {
-            SdfPath target = usdtweak::GetSelection().GetAnchorPrimPath(stage);
-            if (!target.IsEmpty() && !target.IsPrimPath()) target = target.GetPrimPath();
-            if (target.IsEmpty() || !std::binary_search(now.begin(), now.end(), target)) {
-                target = SdfPath();
-                for (const SdfPath& p : now) {
-                    if (!std::binary_search(_lastSeen.begin(), _lastSeen.end(), p)) {
-                        target = p;
-                        break;
-                    }
+            std::vector<SdfPath> next = now;
+            SdfPath target;
+            bool lifted = false;
+            for (const SdfPath& p : now) {
+                if (std::binary_search(_lastSeen.begin(), _lastSeen.end(), p)) continue;
+                const SdfPath object = ObjectFor(stage, p);
+                if (object != p) {
+                    std::replace(next.begin(), next.end(), p, object);
+                    lifted = true;
                 }
+                if (target.IsEmpty()) target = object;
+            }
+            if (lifted) ApplySelection(next);
+            if (target.IsEmpty()) {
+                target = usdtweak::GetSelection().GetAnchorPrimPath(stage);
+                if (!target.IsEmpty() && !target.IsPrimPath()) target = target.GetPrimPath();
+                if (!std::binary_search(now.begin(), now.end(), target)) target = SdfPath();
             }
             if (!target.IsEmpty()) RevealPath(target);
         }
@@ -146,19 +173,18 @@ void SceneTree::RevealPath(const SdfPath& path) {
 
 void SceneTree::OnRowClicked(const SdfPath& path, bool selected) {
     std::vector<SdfPath> next;
-    if (ImGui::GetIO().KeyCtrl) {
-        next.assign(_selected.begin(), _selected.end());
-        if (selected) {
-            next.erase(std::remove(next.begin(), next.end(), path), next.end());
-        } else {
-            next.push_back(path);
+    if (selected) {
+        // Deselecting an object takes everything under it along, whether
+        // it got there by inheritance or by its own ctrl+click. The rest
+        // of the selection stays either way.
+        for (const SdfPath& p : _selected) {
+            if (!p.HasPrefix(path)) next.push_back(p);
         }
-    } else if (selected) {
-        // click on a selected object: that one is deselected, the others
-        // stay — the plain click only ever replaces on the way in
+    } else if (ImGui::GetIO().KeyCtrl) {
         next.assign(_selected.begin(), _selected.end());
-        next.erase(std::remove(next.begin(), next.end(), path), next.end());
+        next.push_back(path);
     } else {
+        // the plain click only ever replaces on the way in
         next.push_back(path);
     }
     ApplySelection(next);

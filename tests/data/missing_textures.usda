@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for a scene whose textures are only partly on this machine:
+# one plain texture and one UDIM set exist, one of each does not.
+def Xform "Root"
+{
+    def Mesh "Panel"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        rel material:binding = </Root/Looks/PanelMaterial>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "PanelMaterial"
+        {
+            token outputs:surface.connect = </Root/Looks/PanelMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/PanelMaterial/DiffuseTexture.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "DiffuseTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/checker.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "TiledTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/tile.<UDIM>.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "LostTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/not_delivered.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "LostTiles"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/not_delivered.<UDIM>.png@
+                float3 outputs:rgb
+            }
+        }
+    }
+}

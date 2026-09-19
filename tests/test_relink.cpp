@@ -113,6 +113,36 @@ int main() {
         CHECK(!fs::exists(outDir / "plain_textures"));
     }
 
+    // --- textures that are not on this machine are left out, named, and
+    //     do not stop the export (USD's packager would give up on them) ---
+    {
+        const std::string partial = FIXTURE_DIR "/missing_textures.usda";
+        for (const char* ext : {".usdz", ".usdc"}) {
+            usdprep::ExtractOptions options;
+            options.primPaths = {"/Root"};
+            options.outputPath = (outDir / (std::string("partial") + ext)).string();
+            const usdprep::Report rep = usdprep::ExtractPrims(partial, options);
+            CHECK(rep.ok);
+            CHECK(fs::exists(options.outputPath));
+            CHECK(rep.after.textureRefs == 2);  // checker + the tile set survive
+            bool named = false;
+            for (const usdprep::ReportEntry& entry : rep.entries) {
+                if (entry.severity == usdprep::ReportEntry::Severity::Warning &&
+                    entry.detail.find("not_delivered.png") != std::string::npos &&
+                    entry.detail.find("2 texture") != std::string::npos) {
+                    named = true;
+                }
+            }
+            CHECK(named);
+        }
+        const std::vector<std::string> paths = AssetPaths((outDir / "partial.usdc").string());
+        CHECK(paths.size() == 2);
+        for (const std::string& path : paths) {
+            CHECK(path.find("not_delivered") == std::string::npos);
+        }
+        CHECK(fs::is_directory(outDir / "partial_textures"));
+    }
+
     // --- usdz still packages everything inside the archive ---
     {
         usdprep::ExtractOptions options;

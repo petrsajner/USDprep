@@ -93,10 +93,26 @@ void ApplySimpleLayoutOnce() {
     }
 }
 
+// usdtweak switches the content browser on every time a stage is opened.
+// In simple mode that is noise: when the flag flips on in the very frame
+// the stage changes, flip it back. A choice the user made in the Windows
+// menu does not coincide with a stage change and is left alone.
+void KeepContentBrowserHidden(const UsdStageRefPtr& stage) {
+    static UsdStageRefPtr lastStage;
+    static bool lastShown = false;
+    Editor* editor = usdtweak::GetEditor();
+    if (!editor) return;
+    bool& shown = editor->GetSettingsForAddons()._showContentBrowser;
+    if (stage != lastStage && shown && !lastShown) shown = false;
+    lastStage = stage;
+    lastShown = shown;
+}
+
 void DrawPrepPanel() {
     ApplySimpleLayoutOnce();
 
     const UsdStageRefPtr stage = usdtweak::GetCurrentStage();
+    KeepContentBrowserHidden(stage);
     if (!stage) {
         ImGui::TextWrapped("Open a USD scene (File > Open), then pick the objects you want "
                            "to take out - here in the tree or by clicking them in the 3D view.");
