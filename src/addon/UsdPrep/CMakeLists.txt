@@ -14,6 +14,8 @@ add_subdirectory(${USDPREP_SOURCE_DIR}/src/core ${CMAKE_CURRENT_BINARY_DIR}/usdp
 usdtweak_add_addon(UsdPrep
     SOURCES
         UsdPrep.cpp
+        SceneTree.cpp
+        ExportPanel.cpp
 )
 
 # NOTE: plain signature on purpose — the usdtweak target uses the plain
