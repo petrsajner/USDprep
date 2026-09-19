@@ -3,8 +3,11 @@
 //   usdcut extract <scene.usd(a|c|z)> <prim-path>... -o out.usdz|usdc|usda
 //   usdcut prune   <scene> --except /A,/B -o out.usdc   (keep only)
 //   usdcut prune   <scene> --drop /A,/B -o out.usdc     (delete selection)
+//   usdcut prune   <scene> --drop-type light -o out.usdc
+//   usdcut select  <scene> --type Mesh --name "*door*"
 //   usdcut inspect <scene> [--report out.json]
 
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -16,6 +19,7 @@
 
 #include <usdprep/Extract.h>
 #include <usdprep/Prune.h>
+#include <usdprep/Select.h>
 #include <usdprep/StageInfo.h>
 #include <usdprep/Version.h>
 
@@ -33,14 +37,25 @@ void PrintUsage() {
         << " — prepare USD scenes for compositing (USD " << UsdVersionString() << ")\n\n"
         << "usage:\n"
         << "  usdcut extract <scene> <prim-path>... -o <out.usdz|usdc|usda> [options]\n"
-        << "  usdcut prune   <scene> (--except <paths> | --drop <paths>) -o <out> [options]\n"
+        << "  usdcut prune   <scene> (--except <paths> | --drop <paths> |\n"
+        << "                          --drop-type <types> | --drop-purpose <purposes>)\n"
+        << "                         -o <out> [options]\n"
+        << "  usdcut select  <scene> [--type <types>] [--name <pattern>]\n"
+        << "                         [--purpose <purposes>] [--under <paths>] [--topmost]\n"
         << "  usdcut inspect <scene> [--report <file.json>]\n"
         << "  usdcut version | help\n\n"
         << "common options:\n"
         << "  -o, --output <path>    output file (.usda, .usdc or .usdz)\n"
         << "  --report <file.json>   write the operation report as JSON\n"
         << "  --keep-instancing      do not convert instanceable prims to plain prims\n"
-        << "  --no-default-prim      do not author defaultPrim on the output\n";
+        << "  --no-default-prim      do not author defaultPrim on the output\n\n"
+        << "filters (comma-separated lists):\n"
+        << "  types                  schema names (Mesh, Camera, SphereLight) or the\n"
+        << "                         family name 'light'; case-insensitive\n"
+        << "  purposes               default, render, proxy, guide (resolved, so a mesh\n"
+        << "                         under a guide group counts as guide)\n"
+        << "  name pattern           plain text matches anywhere in the prim name;\n"
+        << "                         * and ? turn it into a wildcard match\n";
 }
 
 std::vector<std::string> SplitCommaList(const std::string& s) {
@@ -129,27 +144,41 @@ int RunPrune(const std::vector<std::string>& args) {
     // --except/--drop are prune-specific and accept comma lists.
     usdprep::PruneOptions options;
 
+    // Prune-specific flags take comma lists; pull them out of the argument
+    // vector so the common parser only sees what it knows.
     std::vector<std::string> rest = args;
-    for (size_t i = 2; i < rest.size(); /*advanced in loop*/) {
+    for (size_t i = 1; i < rest.size(); /*advanced in loop*/) {
         const std::string& a = rest[i];
-        if (a == "--except" || a == "--drop") {
-            if (i + 1 >= rest.size()) {
-                std::cerr << "usdcut prune: " << a << " needs a comma-separated path list\n";
-                return 2;
-            }
-            if (a == "--except") {
-                options.keepPaths = SplitCommaList(rest[i + 1]);
-            } else {
-                options.dropPaths = SplitCommaList(rest[i + 1]);
-            }
-            rest.erase(rest.begin() + i, rest.begin() + i + 2);
-        } else {
+        const bool isPruneFlag = a == "--except" || a == "--drop" ||
+                                 a == "--drop-type" || a == "--drop-purpose";
+        if (!isPruneFlag) {
             ++i;
+            continue;
         }
+        if (i + 1 >= rest.size()) {
+            std::cerr << "usdcut prune: " << a << " needs a comma-separated list\n";
+            return 2;
+        }
+        const std::vector<std::string> values = SplitCommaList(rest[i + 1]);
+        if (a == "--except") {
+            options.keepPaths = values;
+        } else if (a == "--drop") {
+            options.dropPaths = values;
+        } else if (a == "--drop-type") {
+            options.dropTypes = values;
+        } else {
+            options.dropPurposes = values;
+        }
+        rest.erase(rest.begin() + i, rest.begin() + i + 2);
     }
 
     if (ParseCommon(rest, 1, common, positionals, error) != 0 || positionals.size() != 1) {
-        std::cerr << "usdcut prune: " << (error.empty() ? "usage: usdcut prune <scene> (--except <paths> | --drop <paths>) -o <out>" : error) << "\n";
+        std::cerr << "usdcut prune: "
+                  << (error.empty() ? "usage: usdcut prune <scene> (--except <paths> | "
+                                      "--drop <paths> | --drop-type <types> | "
+                                      "--drop-purpose <purposes>) -o <out>"
+                                    : error)
+                  << "\n";
         return 2;
     }
     options.outputPath = common.output;
@@ -159,6 +188,71 @@ int RunPrune(const std::vector<std::string>& args) {
     usdprep::Report rep = usdprep::PruneStage(positionals[0], options);
     EmitReport(rep, common.reportPath);
     return rep.ok ? 0 : 1;
+}
+
+// `select` prints one prim path per line on stdout (so it pipes into the
+// other commands) and the match summary on stderr.
+int RunSelect(const std::vector<std::string>& args) {
+    usdprep::SelectOptions options;
+    std::string scene;
+    size_t limit = 0;
+
+    for (size_t i = 1; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        const bool takesValue = a == "--type" || a == "--types" || a == "--name" ||
+                                a == "--purpose" || a == "--purposes" ||
+                                a == "--under" || a == "--limit";
+        if (takesValue && i + 1 >= args.size()) {
+            std::cerr << "usdcut select: " << a << " needs a value\n";
+            return 2;
+        }
+        if (a == "--type" || a == "--types") {
+            options.types = SplitCommaList(args[++i]);
+        } else if (a == "--name") {
+            options.namePattern = args[++i];
+        } else if (a == "--purpose" || a == "--purposes") {
+            options.purposes = SplitCommaList(args[++i]);
+        } else if (a == "--under") {
+            options.roots = SplitCommaList(args[++i]);
+        } else if (a == "--limit") {
+            limit = std::strtoul(args[++i].c_str(), nullptr, 10);
+        } else if (a == "--topmost") {
+            options.topmostOnly = true;
+        } else if (!a.empty() && a[0] == '-') {
+            std::cerr << "usdcut select: unknown option: " << a << "\n";
+            return 2;
+        } else if (scene.empty()) {
+            scene = a;
+        } else {
+            std::cerr << "usdcut select: only one scene can be searched\n";
+            return 2;
+        }
+    }
+    if (scene.empty()) {
+        std::cerr << "usdcut select: usage: usdcut select <scene> [--type <types>] "
+                     "[--name <pattern>] [--purpose <purposes>] [--under <paths>] "
+                     "[--topmost] [--limit <n>]\n";
+        return 2;
+    }
+
+    const usdprep::SelectResult result = usdprep::SelectPrims(scene, options);
+    if (!result.error.empty()) {
+        std::cerr << "usdcut select: " << result.error << "\n";
+        return 1;
+    }
+    size_t printed = 0;
+    for (const std::string& path : result.paths) {
+        if (limit != 0 && printed == limit) break;
+        std::cout << path << "\n";
+        ++printed;
+    }
+    std::cerr << result.paths.size() << " match(es) among " << result.visited
+              << " prims";
+    if (printed < result.paths.size()) {
+        std::cerr << " (" << printed << " shown)";
+    }
+    std::cerr << "\n";
+    return 0;
 }
 
 int RunInspect(const std::vector<std::string>& args) {
@@ -248,6 +342,7 @@ int main(int argc, char** argv) {
     }
     if (cmd == "extract") return RunExtract(args);
     if (cmd == "prune") return RunPrune(args);
+    if (cmd == "select") return RunSelect(args);
     if (cmd == "inspect") return RunInspect(args);
     std::cerr << "usdcut: unknown command '" << cmd << "' (see 'usdcut help')\n";
     return 2;

@@ -11,6 +11,7 @@
 #include <pxr/usd/usd/primFlags.h>
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
+#include <pxr/usd/usdLux/lightAPI.h>
 
 namespace usdprep {
 
@@ -23,7 +24,6 @@ void CountStage(const UsdStageRefPtr& stage, Report::Counts& counts,
     const TfToken mesh("Mesh");
     const TfToken material("Material");
     const TfToken shader("Shader");
-    const TfToken light("DistantLight");
     const TfToken camera("Camera");
 
     for (UsdPrim prim :
@@ -32,6 +32,11 @@ void CountStage(const UsdStageRefPtr& stage, Report::Counts& counts,
         if (prim.IsPseudoRoot()) continue;
         ++counts.prims;
         if (prim.IsInstanceable()) ++counts.instances;
+        // Lights are a family, not a type: SphereLight, DomeLight and a
+        // mesh with LightAPI applied all carry UsdLuxLightAPI. Counted
+        // independently of the type chain below, so a geometry light shows
+        // up as both a mesh and a light — which is what it is.
+        if (prim.HasAPI<UsdLuxLightAPI>()) ++counts.lights;
 
         const TfToken type = prim.GetTypeName();
         if (type == mesh) {
@@ -60,8 +65,6 @@ void CountStage(const UsdStageRefPtr& stage, Report::Counts& counts,
                     }
                 }
             }
-        } else if (type == light) {
-            ++counts.lights;
         } else if (type == camera) {
             ++counts.cameras;
         }

@@ -1,0 +1,90 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for the Select filters: several prim types, two light schemas and
+# every purpose, including one inherited from a group.
+def Xform "World"
+{
+    def Xform "Props"
+    {
+        def Mesh "Chair"
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+        }
+
+        def Mesh "ChairProxy"
+        {
+            uniform token purpose = "proxy"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+        }
+
+        def Mesh "Table"
+        {
+            uniform token purpose = "render"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (2, 0, 0), (2, 0, 2), (0, 0, 2)]
+        }
+    }
+
+    # Purpose is inherited: the mesh below resolves to "guide" as well.
+    def Xform "Guides" (
+        kind = "group"
+    )
+    {
+        uniform token purpose = "guide"
+
+        def Mesh "CameraFrustum"
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+        }
+    }
+
+    def Scope "Lights"
+    {
+        def SphereLight "KeyLight"
+        {
+            float inputs:intensity = 500
+        }
+
+        def DistantLight "SunLight"
+        {
+            float inputs:intensity = 2
+        }
+    }
+
+    def Camera "ShotCam"
+    {
+        float focalLength = 35
+    }
+
+    # Real native instancing: instanceable alone does nothing, the prim also
+    # needs a composition arc. Its mesh is only reachable as an instance
+    # proxy, which no consumer may edit per instance.
+    def Xform "InstancedBolt" (
+        instanceable = true
+        references = </_Proto>
+    )
+    {
+    }
+}
+
+class "_Proto"
+{
+    def Mesh "BoltGeo"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+    }
+}
