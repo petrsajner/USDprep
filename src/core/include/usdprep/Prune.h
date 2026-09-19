@@ -20,6 +20,7 @@ struct PruneOptions {
     std::string outputPath;
     bool deinstance = true;
     bool setDefaultPrim = true;
+    bool relinkTextures = true;
 };
 
 // Shrink a scene: either keep-only (implemented as a masked extraction) or

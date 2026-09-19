@@ -48,7 +48,10 @@ void PrintUsage() {
         << "  -o, --output <path>    output file (.usda, .usdc or .usdz)\n"
         << "  --report <file.json>   write the operation report as JSON\n"
         << "  --keep-instancing      do not convert instanceable prims to plain prims\n"
-        << "  --no-default-prim      do not author defaultPrim on the output\n\n"
+        << "  --no-default-prim      do not author defaultPrim on the output\n"
+        << "  --no-relink            .usdc/.usda: leave texture paths pointing at\n"
+        << "                         the source tree instead of copying the files\n"
+        << "                         into a <name>_textures folder next to the output\n\n"
         << "filters (comma-separated lists):\n"
         << "  types                  schema names (Mesh, Camera, SphereLight) or the\n"
         << "                         family name 'light'; case-insensitive\n"
@@ -89,6 +92,7 @@ struct CommonOptions {
     std::string reportPath;
     bool deinstance = true;
     bool setDefaultPrim = true;
+    bool relinkTextures = true;
 };
 
 // Returns the index of the first positional argument (input scene), or -1
@@ -108,6 +112,8 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             common.deinstance = false;
         } else if (a == "--no-default-prim") {
             common.setDefaultPrim = false;
+        } else if (a == "--no-relink") {
+            common.relinkTextures = false;
         } else if (!a.empty() && a[0] == '-') {
             error = "unknown option: " + a;
             return -1;
@@ -131,6 +137,7 @@ int RunExtract(const std::vector<std::string>& args) {
     options.outputPath = common.output;
     options.deinstance = common.deinstance;
     options.setDefaultPrim = common.setDefaultPrim;
+    options.relinkTextures = common.relinkTextures;
     options.primPaths.assign(positionals.begin() + 1, positionals.end());
     usdprep::Report rep = usdprep::ExtractPrims(positionals[0], options);
     EmitReport(rep, common.reportPath);
@@ -184,6 +191,7 @@ int RunPrune(const std::vector<std::string>& args) {
     options.outputPath = common.output;
     options.deinstance = common.deinstance;
     options.setDefaultPrim = common.setDefaultPrim;
+    options.relinkTextures = common.relinkTextures;
 
     usdprep::Report rep = usdprep::PruneStage(positionals[0], options);
     EmitReport(rep, common.reportPath);

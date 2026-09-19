@@ -410,7 +410,7 @@ void DrawPrepAddon() {
     static int format = 0;  // 0 = .usdz package (recommended), 1 = .usdc layer
     const char* formatNames[] = {
         "Package  (.usdz)  — one file, textures included (recommended)",
-        "Layer    (.usdc)  — geometry only, textures stay outside",
+        "Layer    (.usdc)  — file + a folder with its textures",
     };
 
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
@@ -440,8 +440,9 @@ void DrawPrepAddon() {
         ImGui::SetTooltip(
             "Package (.usdz): everything in one file — geometry, materials and\n"
             "textures. Best for sharing and for Nuke.\n"
-            "Layer (.usdc): geometry and materials only; texture files stay\n"
-            "where they are (paths are not adjusted yet).");
+            "Layer (.usdc): the scene file plus a \"<name>_textures\" folder\n"
+            "next to it holding copies of every texture it uses. Keep the\n"
+            "two together when you move the file.");
     }
     if (outputPath[0] != '\0') {
         const std::string synced =
@@ -454,6 +455,7 @@ void DrawPrepAddon() {
     // ----- technical options stay out of the artist's way --------------
     static bool deinstance = true;
     static bool setDefaultPrim = true;
+    static bool relinkTextures = true;
     if (ImGui::CollapsingHeader("Advanced")) {
         ImGui::Checkbox("De-instance", &deinstance);
         if (ImGui::IsItemHovered()) {
@@ -467,6 +469,20 @@ void DrawPrepAddon() {
                 "Marks the main object of the exported file — like the object\n"
                 "name inside an .obj file. Applications use it to know what to\n"
                 "load when the file is imported. Recommended.");
+        }
+        const bool isLayerFormat = format == 1;
+        if (!isLayerFormat) ImGui::BeginDisabled();
+        ImGui::Checkbox("Copy textures next to the file", &relinkTextures);
+        if (!isLayerFormat) ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                isLayerFormat
+                    ? "Copies every texture the objects use into a folder next to\n"
+                      "the exported file and points the file at the copies.\n"
+                      "Without it the file keeps pointing at the original\n"
+                      "textures on this machine. Recommended."
+                    : "Only applies to the .usdc format — a .usdz package always\n"
+                      "carries its textures inside.");
         }
     }
 
@@ -485,6 +501,7 @@ void DrawPrepAddon() {
         options.outputPath = outputPath;
         options.deinstance = deinstance;
         options.setDefaultPrim = setDefaultPrim;
+        options.relinkTextures = relinkTextures;
 
         const std::string stagePath = stage->GetRootLayer()->GetRealPath();
         const auto t0 = std::chrono::steady_clock::now();

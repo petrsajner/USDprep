@@ -55,6 +55,12 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
         }
     }
 
+    if (const size_t anchored = AnchorUnresolvedAssetPaths(stage)) {
+        rep.Info("textures", std::to_string(anchored) +
+                                 " texture path(s) that no resolver can expand (UDIM tile "
+                                 "sets) anchored to their source folder");
+    }
+
     const std::string tmpPath = TempPathFor(options.outputPath);
     if (!stage->Export(tmpPath, /*addSourceFileComment=*/false)) {
         rep.Fail("failed to export flattened layer to " + tmpPath);
@@ -72,7 +78,7 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
         }
     }
 
-    FinalizeOutput(rep, options.outputPath, tmpPath);
+    FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures);
     return rep;
 }
 

@@ -12,6 +12,8 @@ struct ExtractOptions {
     std::string outputPath;              // .usda / .usdc / .usdz
     bool deinstance = true;              // drop instanceable flags in output
     bool setDefaultPrim = true;          // author defaultPrim on the output
+    bool relinkTextures = true;          // .usdc/.usda: copy textures next to
+                                         // the output and repoint the paths
 };
 
 // Copy the given subtrees (with their ancestors and carried dependencies)
@@ -22,7 +24,8 @@ struct ExtractOptions {
 //   from outside the mask are dropped together with their bindings' targets
 //   (dependency curation is the next milestone).
 // - .usdz output localizes referenced textures (incl. UDIM tiles) into the
-//   package; .usdc/.usda output keeps the original texture paths.
+//   package; .usdc/.usda output copies them into a "<name>_textures" folder
+//   next to the file and rewrites the paths (relinkTextures).
 Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options);
 
 }  // namespace usdprep

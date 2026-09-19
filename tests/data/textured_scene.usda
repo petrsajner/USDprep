@@ -1,0 +1,51 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for texture relinking: one plain texture and one UDIM tile set,
+# both referenced relative to this layer.
+def Xform "Root"
+{
+    def Mesh "Panel"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </Root/Looks/PanelMaterial>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "PanelMaterial"
+        {
+            token outputs:surface.connect = </Root/Looks/PanelMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/PanelMaterial/DiffuseTexture.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "DiffuseTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/checker.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "TiledTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/tile.<UDIM>.png@
+                float3 outputs:rgb
+            }
+        }
+    }
+}
