@@ -28,9 +28,13 @@
 namespace {
 
 std::string UsdVersionString() {
-    return std::to_string(PXR_MAJOR_VERSION) + "." +
-           std::to_string(PXR_MINOR_VERSION) + "." +
-           std::to_string(PXR_PATCH_VERSION);
+    // OpenUSD's calendar version lives in minor.patch ("25.11"); the major
+    // is still 0 and printing it only confuses whoever reports a bug.
+    const std::string calendar =
+        std::to_string(PXR_MINOR_VERSION) + "." + std::to_string(PXR_PATCH_VERSION);
+    return PXR_MAJOR_VERSION == 0
+               ? calendar
+               : std::to_string(PXR_MAJOR_VERSION) + "." + calendar;
 }
 
 void PrintUsage() {
