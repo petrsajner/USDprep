@@ -31,6 +31,8 @@
 
 #include <usdprep/Extract.h>
 
+#include "OutputPath.h"
+
 #ifdef _WIN32
 #include <windows.h>
 #include <shobjidl.h>
@@ -44,28 +46,7 @@ constexpr const char* kAddonId = "UsdPrep";
 // small path/string helpers
 // ---------------------------------------------------------------------------
 
-std::string DirectoryOf(const std::string& path) {
-    const size_t slash = path.find_last_of("/\\");
-    return slash == std::string::npos ? std::string(".") : path.substr(0, slash);
-}
-
-std::string BasenameOf(const std::string& path) {
-    const size_t slash = path.find_last_of("/\\");
-    return slash == std::string::npos ? path : path.substr(slash + 1);
-}
-
-bool HasUsdExtension(const std::string& path) {
-    return path.size() > 5 &&
-           (path.compare(path.size() - 5, 5, ".usdz") == 0 ||
-            path.compare(path.size() - 5, 5, ".usdc") == 0 ||
-            path.compare(path.size() - 5, 5, ".usda") == 0);
-}
-
-std::string WithExtension(const std::string& path, const char* ext) {
-    std::string p = path;
-    if (HasUsdExtension(p)) p.resize(p.size() - 5);
-    return p + ext;
-}
+using namespace usdprep_addon;  // path helpers, see OutputPath.h
 
 bool ContainsCaseInsensitive(const std::string& haystack, const std::string& needle) {
     if (needle.empty()) return true;
@@ -415,16 +396,19 @@ void DrawPrepAddon() {
 
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
     ImGui::InputText("##output", outputPath, sizeof(outputPath));
+    const bool editingPath = ImGui::IsItemActive();
     ImGui::PopItemWidth();
     ImGui::SameLine();
 #ifdef _WIN32
     if (ImGui::Button("Browse...")) {
         std::string chosen;
         const std::string current(outputPath);
-        const std::string suggestion =
-            HasUsdExtension(current)
-                ? BasenameOf(current)
-                : BasenameOf(current) + std::string(format == 0 ? ".usdz" : ".usdc");
+        // Never carry a nameless path into the dialog: offer the object's
+        // own name instead, the same one the field starts with.
+        std::string stem = OutputNameOf(current);
+        if (stem.empty() && !roots.empty()) stem = roots.front().GetName();
+        if (stem.empty()) stem = "asset";
+        const std::string suggestion = stem + (format == 0 ? ".usdz" : ".usdc");
         if (NativeSaveDialog(suggestion, format == 0, chosen)) {
             std::snprintf(outputPath, sizeof(outputPath), "%s", chosen.c_str());
             format = (chosen.size() > 5 &&
@@ -444,7 +428,10 @@ void DrawPrepAddon() {
             "next to it holding copies of every texture it uses. Keep the\n"
             "two together when you move the file.");
     }
-    if (outputPath[0] != '\0') {
+    // Keep the extension in step with the chosen format — but never while
+    // the artist is typing. Rewriting the field under the cursor turns
+    // "koste" into "k.usdzoste" one keystroke at a time.
+    if (!editingPath && outputPath[0] != '\0') {
         const std::string synced =
             WithExtension(outputPath, format == 0 ? ".usdz" : ".usdc");
         if (synced != outputPath) {
@@ -490,7 +477,11 @@ void DrawPrepAddon() {
 
     // ----- run ---------------------------------------------------------
     static std::string lastReport;
-    const bool canExport = !roots.empty() && outputPath[0] != '\0';
+    const std::string blocker = ExportBlocker(!roots.empty(), outputPath);
+    const bool canExport = blocker.empty();
+    if (!canExport) {
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s", blocker.c_str());
+    }
     if (!canExport) ImGui::BeginDisabled();
     if (ImGui::Button("Export selection", ImVec2(-1.0f, 0.0f))) {
         usdprep::ExtractOptions options;
@@ -515,14 +506,19 @@ void DrawPrepAddon() {
         lastReport = header + rep.ToText();
 
         if (rep.ok) {
-            usdtweak::SetAddonString(kAddonId, "lastDir", DirectoryOf(outputPath));
-            usdtweak::PersistSettings();
+            // "." would be the app's working directory next session, which
+            // is wherever the shortcut happens to point — not a folder the
+            // artist chose.
+            const std::string dir = DirectoryOf(outputPath);
+            if (dir != ".") {
+                usdtweak::SetAddonString(kAddonId, "lastDir", dir);
+                usdtweak::PersistSettings();
+            }
         }
     }
     if (!canExport) ImGui::EndDisabled();
     if (ImGui::IsItemHovered() && !canExport) {
-        ImGui::SetTooltip(
-            "Check at least one object in the tree above\n(or click objects in the 3D view).");
+        ImGui::SetTooltip("%s", blocker.c_str());
     }
 
     if (!lastReport.empty()) {
