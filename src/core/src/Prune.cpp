@@ -86,59 +86,8 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
     const std::string inputDefaultPrim =
         stage->GetDefaultPrim() ? stage->GetDefaultPrim().GetName().GetString() : "";
 
-    // Category filters ("all lights", "everything with purpose guide") are
-    // resolved against the input stage and join the explicit drop paths.
-    // The two categories are independent requests, so they are resolved
-    // separately and unioned — one Select with both filters set would mean
-    // "lights that are also guides", which is not what --drop-type
-    // --drop-purpose asks for.
-    std::vector<std::string> dropPaths = options.dropPaths;
-    const auto resolveFilter = [&](const char* label, const std::vector<std::string>& types,
-                                   const std::vector<std::string>& purposes) {
-        if (types.empty() && purposes.empty()) return true;
-        SelectOptions selectOptions;
-        selectOptions.types = types;
-        selectOptions.purposes = purposes;
-        selectOptions.topmostOnly = true;
-        const SelectResult sel = SelectPrims(stage, selectOptions);
-        if (!sel.error.empty()) {
-            rep.Fail(sel.error);
-            return false;
-        }
-        if (sel.paths.empty()) {
-            rep.Warn("select", std::string("no prim matched the ") + label +
-                                   " filter — nothing dropped by it");
-        } else {
-            rep.Info("select", std::to_string(sel.paths.size()) +
-                                   " subtree(s) matched the " + label + " filter");
-        }
-        // Prims inside instanced content are only editable once the stage
-        // has been de-instanced — otherwise they live in a prototype that
-        // this one instance does not own. Leave them alone and say so.
-        size_t insideInstances = 0;
-        for (const std::string& path : sel.paths) {
-            if (!options.deinstance) {
-                const UsdPrim prim = stage->GetPrimAtPath(SdfPath(path));
-                if (prim && prim.IsInstanceProxy()) {
-                    ++insideInstances;
-                    continue;
-                }
-            }
-            dropPaths.push_back(path);
-        }
-        if (insideInstances > 0) {
-            rep.Warn("select",
-                     std::to_string(insideInstances) +
-                         " match(es) live inside instanced content and were kept — "
-                         "deleting them requires de-instancing");
-        }
-        return true;
-    };
-    if (!resolveFilter("type", options.dropTypes, {})) return rep;
-    if (!resolveFilter("purpose", {}, options.dropPurposes)) return rep;
-
     const std::vector<SdfPath> roots =
-        RemoveNestedPaths(ValidatePrimPaths(stage, dropPaths, rep));
+        RemoveNestedPaths(ValidatePrimPaths(stage, options.dropPaths, rep));
     if (!rep.error.empty()) return rep;
 
     if (options.deinstance) {
@@ -183,8 +132,11 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
             return rep;
         }
     }
-    rep.Info("prune-drop",
-             std::to_string(roots.size()) + " subtree(s) deleted from the flattened layer");
+    if (!roots.empty()) {
+        rep.Info("prune-drop", std::to_string(roots.size()) +
+                                   " subtree(s) deleted from the flattened layer");
+    }
+    DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
 
     if (options.setDefaultPrim && !flat->GetDefaultPrim()) {
         // Prefer the input's own default prim when it survived the prune.

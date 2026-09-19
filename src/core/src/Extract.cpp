@@ -67,15 +67,21 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
         return rep;
     }
 
-    // Post-pass on the flattened output: author defaultPrim if missing.
-    if (options.setDefaultPrim) {
-        if (UsdStageRefPtr flat = UsdStage::Open(tmpPath)) {
-            if (AuthorDefaultPrim(flat, roots.front())) {
-                rep.Info("defaultPrim",
-                         "set to top-level ancestor of " + roots.front().GetAsString());
-                flat->Save();
-            }
+    // Post-pass on the flattened output: drop the categories the recipe
+    // asks for, then author defaultPrim if missing.
+    const bool hasFilters = !options.dropTypes.empty() || !options.dropPurposes.empty();
+    if (options.setDefaultPrim || hasFilters) {
+        const UsdStageRefPtr flat = UsdStage::Open(tmpPath);
+        if (!flat) {
+            rep.Fail("cannot reopen the flattened layer: " + tmpPath);
+            return rep;
         }
+        DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
+        if (options.setDefaultPrim && AuthorDefaultPrim(flat, roots.front())) {
+            rep.Info("defaultPrim",
+                     "set to top-level ancestor of " + roots.front().GetAsString());
+        }
+        flat->Save();
     }
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures);

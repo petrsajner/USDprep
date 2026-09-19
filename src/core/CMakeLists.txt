@@ -1,6 +1,7 @@
 add_library(usdprep-core
     src/Extract.cpp
     src/Prune.cpp
+    src/Recipe.cpp
     src/Report.cpp
     src/Select.cpp
     src/StageInfo.cpp

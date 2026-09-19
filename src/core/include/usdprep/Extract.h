@@ -14,6 +14,10 @@ struct ExtractOptions {
     bool setDefaultPrim = true;          // author defaultPrim on the output
     bool relinkTextures = true;          // .usdc/.usda: copy textures next to
                                          // the output and repoint the paths
+    // Categories removed from the extracted result, e.g. the preview cards
+    // and proxy geometry a production asset carries (Select's vocabulary).
+    std::vector<std::string> dropTypes;
+    std::vector<std::string> dropPurposes;
 };
 
 // Copy the given subtrees (with their ancestors and carried dependencies)

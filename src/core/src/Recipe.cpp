@@ -1,0 +1,218 @@
+#include <usdprep/Recipe.h>
+
+#include <fstream>
+#include <sstream>
+
+#include <pxr/base/js/json.h>
+#include <pxr/base/js/value.h>
+
+namespace usdprep {
+
+namespace {
+
+using namespace pxr;
+
+// The shipped recipes. "nuke" answers "just give me something I can drop
+// into a comp"; "raw" is the escape hatch that curates nothing.
+const Recipe& NukePreset() {
+    static const Recipe recipe = [] {
+        Recipe r;
+        r.name = "nuke";
+        r.description =
+            "Nuke-ready: one self-contained asset, plain prims, no guide or "
+            "proxy geometry. Cameras and lights are kept.";
+        r.deinstance = true;
+        r.setDefaultPrim = true;
+        r.relinkTextures = true;
+        r.dropPurposes = {"guide", "proxy"};
+        return r;
+    }();
+    return recipe;
+}
+
+const Recipe& RawPreset() {
+    static const Recipe recipe = [] {
+        Recipe r;
+        r.name = "raw";
+        r.description =
+            "Flatten only: keep instancing, keep every purpose, leave texture "
+            "paths alone. The closest thing to usdcat --flatten.";
+        r.deinstance = false;
+        r.setDefaultPrim = false;
+        r.relinkTextures = false;
+        return r;
+    }();
+    return recipe;
+}
+
+bool ReadBool(const JsValue& value, bool* out, const std::string& key,
+              std::string* error) {
+    if (!value.IsBool()) {
+        *error = "'" + key + "' must be true or false";
+        return false;
+    }
+    *out = value.GetBool();
+    return true;
+}
+
+bool ReadStringArray(const JsValue& value, std::vector<std::string>* out,
+                     const std::string& key, std::string* error) {
+    if (!value.IsArray()) {
+        *error = "'" + key + "' must be a list of strings";
+        return false;
+    }
+    out->clear();
+    for (const JsValue& entry : value.GetJsArray()) {
+        if (!entry.IsString()) {
+            *error = "'" + key + "' must contain strings only";
+            return false;
+        }
+        out->push_back(entry.GetString());
+    }
+    return true;
+}
+
+std::string JsonEscape(const std::string& s) {
+    static const char kBackslash = '\\';
+    std::string out;
+    for (const char c : s) {
+        if (c == '"' || c == kBackslash) {
+            out += kBackslash;
+            out += c;
+        } else if (c == '\n') {
+            out += kBackslash;
+            out += 'n';
+        } else {
+            out += c;
+        }
+    }
+    return out;
+}
+
+std::string JsonStringList(const std::vector<std::string>& values) {
+    std::string out = "[";
+    for (size_t i = 0; i < values.size(); ++i) {
+        out += (i == 0 ? "\"" : ", \"") + JsonEscape(values[i]) + "\"";
+    }
+    return out + "]";
+}
+
+}  // namespace
+
+std::vector<std::string> PresetNames() { return {"nuke", "raw"}; }
+
+bool GetPreset(const std::string& name, Recipe* recipe) {
+    if (name == "nuke") {
+        *recipe = NukePreset();
+        return true;
+    }
+    if (name == "raw") {
+        *recipe = RawPreset();
+        return true;
+    }
+    return false;
+}
+
+bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
+                std::vector<std::string>* warnings) {
+    error->clear();
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        *error = "cannot read recipe file: " + path;
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+
+    JsParseError parseError;
+    const JsValue parsed = JsParseString(buffer.str(), &parseError);
+    if (!parsed.IsObject()) {
+        *error = parseError.reason.empty()
+                     ? "recipe " + path + " must contain a JSON object"
+                     : "recipe " + path + " is not valid JSON (line " +
+                           std::to_string(parseError.line) + ": " +
+                           parseError.reason + ")";
+        return false;
+    }
+
+    // A recipe starts from the shipped defaults and overrides what it
+    // mentions, so a two-line recipe file is a valid recipe.
+    Recipe loaded;
+
+    // "preset" is the base the rest of the file overrides, so it has to be
+    // applied before the other keys — the object hands them over sorted by
+    // name, which would otherwise let "dropTypes" lose to a later "preset".
+    const JsObject& object = parsed.GetJsObject();
+    const auto presetEntry = object.find("preset");
+    if (presetEntry != object.end()) {
+        const JsValue& value = presetEntry->second;
+        if (!value.IsString() || !GetPreset(value.GetString(), &loaded)) {
+            *error = "'preset' must name a built-in preset";
+            return false;
+        }
+        loaded.name = "custom";
+    }
+
+    for (const auto& entry : object) {
+        const std::string& key = entry.first;
+        const JsValue& value = entry.second;
+        bool ok = true;
+        if (key == "name" || key == "description") {
+            if (!value.IsString()) {
+                *error = "'" + key + "' must be a string";
+                return false;
+            }
+            (key == "name" ? loaded.name : loaded.description) = value.GetString();
+        } else if (key == "preset") {
+            // already applied above, as the base for everything else
+        } else if (key == "deinstance") {
+            ok = ReadBool(value, &loaded.deinstance, key, error);
+        } else if (key == "setDefaultPrim") {
+            ok = ReadBool(value, &loaded.setDefaultPrim, key, error);
+        } else if (key == "relinkTextures") {
+            ok = ReadBool(value, &loaded.relinkTextures, key, error);
+        } else if (key == "dropTypes") {
+            ok = ReadStringArray(value, &loaded.dropTypes, key, error);
+        } else if (key == "dropPurposes") {
+            ok = ReadStringArray(value, &loaded.dropPurposes, key, error);
+        } else if (warnings) {
+            warnings->push_back("recipe key '" + key +
+                                "' is not understood by this version and was ignored");
+        }
+        if (!ok) return false;
+    }
+    *recipe = loaded;
+    return true;
+}
+
+std::string RecipeToJson(const Recipe& recipe) {
+    std::ostringstream os;
+    os << "{\n";
+    os << "  \"name\": \"" << JsonEscape(recipe.name) << "\",\n";
+    os << "  \"description\": \"" << JsonEscape(recipe.description) << "\",\n";
+    os << "  \"deinstance\": " << (recipe.deinstance ? "true" : "false") << ",\n";
+    os << "  \"setDefaultPrim\": " << (recipe.setDefaultPrim ? "true" : "false") << ",\n";
+    os << "  \"relinkTextures\": " << (recipe.relinkTextures ? "true" : "false") << ",\n";
+    os << "  \"dropTypes\": " << JsonStringList(recipe.dropTypes) << ",\n";
+    os << "  \"dropPurposes\": " << JsonStringList(recipe.dropPurposes) << "\n";
+    os << "}\n";
+    return os.str();
+}
+
+void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
+    options->deinstance = recipe.deinstance;
+    options->setDefaultPrim = recipe.setDefaultPrim;
+    options->relinkTextures = recipe.relinkTextures;
+    options->dropTypes = recipe.dropTypes;
+    options->dropPurposes = recipe.dropPurposes;
+}
+
+void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
+    options->deinstance = recipe.deinstance;
+    options->setDefaultPrim = recipe.setDefaultPrim;
+    options->relinkTextures = recipe.relinkTextures;
+    options->dropTypes = recipe.dropTypes;
+    options->dropPurposes = recipe.dropPurposes;
+}
+
+}  // namespace usdprep

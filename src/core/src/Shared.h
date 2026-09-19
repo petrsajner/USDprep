@@ -26,6 +26,7 @@
 #include <pxr/usd/usdUtils/usdzPackage.h>
 
 #include <usdprep/Report.h>
+#include <usdprep/Select.h>
 #include <usdprep/StageInfo.h>
 
 namespace usdprep {
@@ -91,6 +92,67 @@ inline bool AuthorDefaultPrim(const UsdStageRefPtr& flatStage, const SdfPath& ro
     if (!prim) return false;
     flatStage->SetDefaultPrim(prim);
     return static_cast<bool>(flatStage->GetDefaultPrim());
+}
+
+// Remove whole categories (every light, everything with purpose guide)
+// from an already flattened stage. The categories are independent
+// requests, so they are resolved one at a time and unioned: one Select
+// with both filters set would mean "lights that are also guides".
+inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
+                                    const std::vector<std::string>& types,
+                                    const std::vector<std::string>& purposes) {
+    if (types.empty() && purposes.empty()) return;
+
+    std::vector<std::string> paths;
+    size_t insideInstances = 0;
+    const auto collect = [&](const char* label, const std::vector<std::string>& t,
+                             const std::vector<std::string>& p) {
+        if (t.empty() && p.empty()) return;
+        SelectOptions options;
+        options.types = t;
+        options.purposes = p;
+        options.topmostOnly = true;
+        const SelectResult sel = SelectPrims(flat, options);
+        if (!sel.error.empty()) {
+            rep.Warn("strip", sel.error);
+            return;
+        }
+        if (sel.paths.empty()) {
+            rep.Warn("strip", std::string("no prim matched the ") + label +
+                                  " filter — nothing dropped by it");
+            return;
+        }
+        for (const std::string& path : sel.paths) {
+            const UsdPrim prim = flat->GetPrimAtPath(SdfPath(path));
+            // Content inside an instance belongs to a prototype shared by
+            // every instance, so it cannot be dropped for just this one.
+            if (prim && prim.IsInstanceProxy()) {
+                ++insideInstances;
+                continue;
+            }
+            paths.push_back(path);
+        }
+    };
+    collect("type", types, {});
+    collect("purpose", {}, purposes);
+
+    size_t removed = 0;
+    for (const std::string& path : paths) {
+        const SdfPath primPath(path);
+        // A match from the other category may already have taken this
+        // subtree with it.
+        if (!flat->GetPrimAtPath(primPath)) continue;
+        if (flat->RemovePrim(primPath)) ++removed;
+    }
+    if (removed > 0) {
+        rep.Info("strip", std::to_string(removed) +
+                              " subtree(s) removed by the type/purpose filter");
+    }
+    if (insideInstances > 0) {
+        rep.Warn("strip", std::to_string(insideInstances) +
+                              " match(es) live inside instanced content and were kept "
+                              "— deleting them requires de-instancing");
+    }
 }
 
 // Flatten turns asset paths into absolute ones by resolving them — but a

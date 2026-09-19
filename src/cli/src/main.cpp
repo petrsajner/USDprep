@@ -6,6 +6,7 @@
 //   usdcut prune   <scene> --drop-type light -o out.usdc
 //   usdcut select  <scene> --type Mesh --name "*door*"
 //   usdcut inspect <scene> [--report out.json]
+//   usdcut presets [<name>]
 
 #include <cstdlib>
 #include <cstring>
@@ -19,6 +20,7 @@
 
 #include <usdprep/Extract.h>
 #include <usdprep/Prune.h>
+#include <usdprep/Recipe.h>
 #include <usdprep/Select.h>
 #include <usdprep/StageInfo.h>
 #include <usdprep/Version.h>
@@ -43,9 +45,12 @@ void PrintUsage() {
         << "  usdcut select  <scene> [--type <types>] [--name <pattern>]\n"
         << "                         [--purpose <purposes>] [--under <paths>] [--topmost]\n"
         << "  usdcut inspect <scene> [--report <file.json>]\n"
+        << "  usdcut presets [<name>]   list the built-in recipes, or print one\n"
         << "  usdcut version | help\n\n"
         << "common options:\n"
         << "  -o, --output <path>    output file (.usda, .usdc or .usdz)\n"
+        << "  --preset <name>        start from a built-in recipe (usdcut presets)\n"
+        << "  --recipe <file.json>   start from a recipe file; later flags win\n"
         << "  --report <file.json>   write the operation report as JSON\n"
         << "  --keep-instancing      do not convert instanceable prims to plain prims\n"
         << "  --no-default-prim      do not author defaultPrim on the output\n"
@@ -90,10 +95,51 @@ void EmitReport(const usdprep::Report& rep, const std::string& jsonPath) {
 struct CommonOptions {
     std::string output;
     std::string reportPath;
+    std::string preset;
+    std::string recipePath;
     bool deinstance = true;
     bool setDefaultPrim = true;
     bool relinkTextures = true;
+    // A flag that was actually typed beats whatever the recipe said, so
+    // the parser records which ones appeared on the command line.
+    bool deinstanceGiven = false;
+    bool setDefaultPrimGiven = false;
+    bool relinkTexturesGiven = false;
 };
+
+// Resolve --preset / --recipe into one recipe. False = already reported.
+bool ResolveRecipe(const CommonOptions& common, usdprep::Recipe* recipe) {
+    if (!common.preset.empty() && !usdprep::GetPreset(common.preset, recipe)) {
+        std::cerr << "usdcut: unknown preset " << common.preset
+                  << " (see usdcut presets)\n";
+        return false;
+    }
+    if (!common.recipePath.empty()) {
+        std::string error;
+        std::vector<std::string> warnings;
+        usdprep::Recipe fromFile = *recipe;
+        if (!usdprep::LoadRecipe(common.recipePath, &fromFile, &error, &warnings)) {
+            std::cerr << "usdcut: " << error << "\n";
+            return false;
+        }
+        for (const std::string& warning : warnings) {
+            std::cerr << "warning: " << warning << "\n";
+        }
+        *recipe = fromFile;
+    }
+    return true;
+}
+
+// Recipe first, then the flags that were typed on top of it.
+template <typename Options>
+void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
+                 Options* options) {
+    usdprep::ApplyRecipe(recipe, options);
+    if (common.deinstanceGiven) options->deinstance = common.deinstance;
+    if (common.setDefaultPrimGiven) options->setDefaultPrim = common.setDefaultPrim;
+    if (common.relinkTexturesGiven) options->relinkTextures = common.relinkTextures;
+    options->outputPath = common.output;
+}
 
 // Returns the index of the first positional argument (input scene), or -1
 // on error. Positional prim paths are appended to `positionals`.
@@ -108,12 +154,21 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
         } else if (a == "--report") {
             if (++i >= args.size()) { error = "--report needs a value"; return -1; }
             common.reportPath = args[i];
+        } else if (a == "--preset") {
+            if (++i >= args.size()) { error = "--preset needs a value"; return -1; }
+            common.preset = args[i];
+        } else if (a == "--recipe") {
+            if (++i >= args.size()) { error = "--recipe needs a value"; return -1; }
+            common.recipePath = args[i];
         } else if (a == "--keep-instancing") {
             common.deinstance = false;
+            common.deinstanceGiven = true;
         } else if (a == "--no-default-prim") {
             common.setDefaultPrim = false;
+            common.setDefaultPrimGiven = true;
         } else if (a == "--no-relink") {
             common.relinkTextures = false;
+            common.relinkTexturesGiven = true;
         } else if (!a.empty() && a[0] == '-') {
             error = "unknown option: " + a;
             return -1;
@@ -133,11 +188,10 @@ int RunExtract(const std::vector<std::string>& args) {
         std::cerr << "usdcut extract: " << (error.empty() ? "usage: usdcut extract <scene> <prim-path>... -o <out>" : error) << "\n";
         return 2;
     }
+    usdprep::Recipe recipe;
+    if (!ResolveRecipe(common, &recipe)) return 2;
     usdprep::ExtractOptions options;
-    options.outputPath = common.output;
-    options.deinstance = common.deinstance;
-    options.setDefaultPrim = common.setDefaultPrim;
-    options.relinkTextures = common.relinkTextures;
+    ApplyCommon(common, recipe, &options);
     options.primPaths.assign(positionals.begin() + 1, positionals.end());
     usdprep::Report rep = usdprep::ExtractPrims(positionals[0], options);
     EmitReport(rep, common.reportPath);
@@ -188,10 +242,15 @@ int RunPrune(const std::vector<std::string>& args) {
                   << "\n";
         return 2;
     }
-    options.outputPath = common.output;
-    options.deinstance = common.deinstance;
-    options.setDefaultPrim = common.setDefaultPrim;
-    options.relinkTextures = common.relinkTextures;
+    usdprep::Recipe recipe;
+    if (!ResolveRecipe(common, &recipe)) return 2;
+    const std::vector<std::string> typedDropTypes = options.dropTypes;
+    const std::vector<std::string> typedDropPurposes = options.dropPurposes;
+    ApplyCommon(common, recipe, &options);
+    // Categories typed on the command line replace the recipe's, they do
+    // not add to them.
+    if (!typedDropTypes.empty()) options.dropTypes = typedDropTypes;
+    if (!typedDropPurposes.empty()) options.dropPurposes = typedDropPurposes;
 
     usdprep::Report rep = usdprep::PruneStage(positionals[0], options);
     EmitReport(rep, common.reportPath);
@@ -260,6 +319,27 @@ int RunSelect(const std::vector<std::string>& args) {
         std::cerr << " (" << printed << " shown)";
     }
     std::cerr << "\n";
+    return 0;
+}
+
+// `presets` with no argument lists what ships; with a name it prints that
+// recipe as JSON, the starting point for a studio recipe file.
+int RunPresets(const std::vector<std::string>& args) {
+    usdprep::Recipe recipe;
+    if (args.size() > 1) {
+        if (!usdprep::GetPreset(args[1], &recipe)) {
+            std::cerr << "usdcut presets: unknown preset " << args[1] << "\n";
+            return 2;
+        }
+        std::cout << usdprep::RecipeToJson(recipe);
+        return 0;
+    }
+    for (const std::string& name : usdprep::PresetNames()) {
+        usdprep::GetPreset(name, &recipe);
+        std::cout << "  " << name << "\n      " << recipe.description << "\n";
+    }
+    std::cout << "\nusdcut presets <name> prints one as JSON; hand such a file "
+                 "to --recipe.\n";
     return 0;
 }
 
@@ -348,6 +428,7 @@ int main(int argc, char** argv) {
                   << ", USD " << UsdVersionString() << ")\n";
         return 0;
     }
+    if (cmd == "presets") return RunPresets(args);
     if (cmd == "extract") return RunExtract(args);
     if (cmd == "prune") return RunPrune(args);
     if (cmd == "select") return RunSelect(args);
