@@ -1,0 +1,82 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+over "Flattened_Prototype_1"
+{
+    def Mesh "BoltGeo"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+    }
+}
+
+def Xform "World"
+{
+    def Xform "Props"
+    {
+        def Mesh "Chair"
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+        }
+
+        def Mesh "ChairProxy"
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+            uniform token purpose = "proxy"
+        }
+
+        def Mesh "Table"
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (2, 0, 0), (2, 0, 2), (0, 0, 2)]
+            uniform token purpose = "render"
+        }
+    }
+
+    def Xform "Guides" (
+        kind = "group"
+    )
+    {
+        uniform token purpose = "guide"
+
+        def Mesh "CameraFrustum"
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+        }
+    }
+
+    def Camera "ShotCam"
+    {
+        float focalLength = 35
+    }
+
+    def Xform "InstancedBolt" (
+        instanceable = true
+        add references = </Flattened_Prototype_1>
+    )
+    {
+    }
+}
+
+class "_Proto"
+{
+    def Mesh "BoltGeo"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]
+    }
+}
+

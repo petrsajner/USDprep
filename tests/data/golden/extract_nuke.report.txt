@@ -1,0 +1,8 @@
+input:  <FIXTURES>/filter_scene.usda
+output: <OUT>/extract_nuke.usda (<size>)
+  before: prims 13, meshes 5, materials 0, shaders 0, instances 1, lights 2, cameras 1, texture refs 0
+  after : prims 10, meshes 3, materials 0, shaders 0, instances 0, lights 2, cameras 1, texture refs 0
+  [info] extract: 1 subtree(s) selected; composition flattened
+  [info] de-instance: 1 instanceable prim(s) converted to plain prims
+  [info] strip: 2 subtree(s) removed by the type/purpose filter
+  [info] defaultPrim: set to top-level ancestor of /World

@@ -1,0 +1,6 @@
+input:  <FIXTURES>/filter_scene.usda
+output: <OUT>/prune_raw.usda (<size>)
+  before: prims 13, meshes 5, materials 0, shaders 0, instances 1, lights 2, cameras 1, texture refs 0
+  after : prims 10, meshes 5, materials 0, shaders 0, instances 1, lights 0, cameras 1, texture refs 0
+  [info] flatten: composition flattened to a single layer
+  [info] prune-drop: 1 subtree(s) deleted from the flattened layer
