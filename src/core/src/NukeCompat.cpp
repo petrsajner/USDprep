@@ -9,7 +9,12 @@
 #include <pxr/usd/usdGeom/gprim.h>
 #include <pxr/usd/usdGeom/imageable.h>
 #include <pxr/usd/usdGeom/tokens.h>
+#include <pxr/usd/usdGeom/metrics.h>
+#include <pxr/usd/usdGeom/xformable.h>
 #include <pxr/usd/usdLux/lightAPI.h>
+#include <pxr/usd/usdSkel/bakeSkinning.h>
+#include <pxr/usd/usdSkel/bindingAPI.h>
+#include <pxr/usd/usdSkel/root.h>
 
 namespace usdprep {
 namespace detail {
@@ -149,9 +154,62 @@ void ReplaceUnreadableLights(Report& rep, const UsdStageRefPtr& flat) {
     }
 }
 
+// Nuke does not evaluate UsdSkel: a skinned character stands in its bind
+// pose. USD's own baker turns the skinning into what Nuke does read - a
+// point cache on every skinned mesh. Runs before the animation trim, so
+// the trim applies to the baked samples as to any other.
+void BakeSkinning(Report& rep, const UsdStageRefPtr& flat) {
+    std::vector<std::string> roots;
+    for (const UsdPrim& prim : flat->Traverse()) {
+        if (prim.IsA<UsdSkelRoot>()) roots.push_back(prim.GetPath().GetString());
+    }
+    if (roots.empty()) return;
+    size_t skinned = 0;
+    for (const UsdPrim& prim : flat->Traverse()) {
+        if (prim.IsA<UsdGeomGprim>() && prim.HasAPI<UsdSkelBindingAPI>()) ++skinned;
+    }
+    if (UsdSkelBakeSkinning(flat->Traverse())) {
+        rep.Info("nuke", "skeletal animation baked into point caches on " + std::to_string(skinned) +
+                             " mesh(es) - Nuke does not evaluate skinning and would show the bind pose: " +
+                             NameList(roots));
+    } else {
+        rep.Warn("nuke", "skeletal animation could not be baked; Nuke will show the bind pose of: " +
+                             NameList(roots));
+    }
+}
+
+// Nuke takes every file as Y-up. A Z-up scene (Houdini, Blender, 3ds Max
+// pipelines) arrives lying on its back, so its top-level prims get one
+// rotation in front of their own transform and the stage says Y.
+void ConvertToYUp(Report& rep, const UsdStageRefPtr& flat) {
+    if (UsdGeomGetStageUpAxis(flat) != UsdGeomTokens->z) return;
+    std::vector<std::string> rotated;
+    for (UsdPrim prim : flat->GetPseudoRoot().GetChildren()) {
+        if (!prim.IsA<UsdGeomXformable>()) {
+            // a Scope or an untyped group cannot carry a transform; an Xform is the same thing that can
+            if (!prim.GetTypeName().IsEmpty() && prim.GetTypeName() != "Scope") continue;
+            prim.SetTypeName(TfToken("Xform"));
+        }
+        UsdGeomXformable xformable(prim);
+        bool resets = false;
+        std::vector<UsdGeomXformOp> ops = xformable.GetOrderedXformOps(&resets);
+        const UsdGeomXformOp yUp =
+            xformable.AddRotateXOp(UsdGeomXformOp::PrecisionFloat, TfToken("usdprepYUp"));
+        yUp.Set(-90.0f);
+        ops.insert(ops.begin(), yUp);
+        xformable.SetXformOpOrder(ops, resets);
+        rotated.push_back(prim.GetPath().GetString());
+    }
+    UsdGeomSetStageUpAxis(flat, UsdGeomTokens->y);
+    rep.Info("nuke", "the scene was Z-up; Nuke reads every file as Y-up, so " + NameList(rotated) +
+                         " got a -90 degree X rotation (xformOp:rotateX:usdprepYUp) and the file now says Y-up");
+}
+
 }  // namespace
 
 void MakeNukeReadable(Report& rep, const UsdStageRefPtr& flat) {
+    BakeSkinning(rep, flat);
+    ConvertToYUp(rep, flat);
     HideGuidesAndProxies(rep, flat);
     MakeMaterialsRenderable(rep, flat);
     ReplaceUnreadableLights(rep, flat);

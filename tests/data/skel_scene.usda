@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    upAxis = "Y"
+    startTimeCode = 1
+    endTimeCode = 10
+)
+def SkelRoot "Root"
+{
+    def Skeleton "Skel" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        uniform token[] joints = ["Base", "Base/Tip"]
+        uniform matrix4d[] bindTransforms = [((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1)), ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1))]
+        uniform matrix4d[] restTransforms = [((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1)), ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1))]
+        rel skel:animationSource = </Root/Skel/Anim>
+
+        def SkelAnimation "Anim"
+        {
+            uniform token[] joints = ["Base", "Base/Tip"]
+            float3[] translations.timeSamples = {
+                1: [(0, 0, 0), (-0.8, 0, 0)],
+                10: [(0, 0, 0), (0.8, 0, 0)],
+            }
+            quatf[] rotations = [(1, 0, 0, 0), (1, 0, 0, 0)]
+            half3[] scales = [(1, 1, 1), (1, 1, 1)]
+        }
+    }
+
+    def Mesh "Quad" (
+        prepend apiSchemas = ["SkelBindingAPI", "MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-0.4, -0.4, 0), (0.4, -0.4, 0), (0.4, 0.4, 0), (-0.4, 0.4, 0)]
+        uniform token subdivisionScheme = "none"
+        int[] primvars:skel:jointIndices = [1, 1, 1, 1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1, 1, 1, 1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        matrix4d primvars:skel:geomBindTransform = ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1))
+        rel skel:skeleton = </Root/Skel>
+        rel material:binding = </Root/Mat>
+    }
+    def Material "Mat"
+    {
+        token outputs:surface.connect = </Root/Mat/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.9, 0.05, 0.05)
+            token outputs:surface
+        }
+    }
+}

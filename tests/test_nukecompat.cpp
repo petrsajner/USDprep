@@ -8,7 +8,11 @@
 #include <pxr/usd/usd/attribute.h>
 #include <pxr/usd/usd/prim.h>
 #include <pxr/usd/usd/stage.h>
+#include <pxr/base/gf/vec3f.h>
+#include <pxr/base/vt/array.h>
+#include <pxr/usd/usdGeom/bboxCache.h>
 #include <pxr/usd/usdGeom/imageable.h>
+#include <pxr/usd/usdGeom/metrics.h>
 #include <pxr/usd/usdGeom/tokens.h>
 #include <pxr/usd/usdGeom/xformable.h>
 
@@ -125,6 +129,46 @@ int main() {
         CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Sun")).GetTypeName() == "DistantLight");
         CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Looks/Both")).GetAttribute(pxr::TfToken("outputs:mtlx:surface")));
         CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Exotic")).GetRelationship(pxr::TfToken("material:binding")));
+    }
+
+    // --- skinning becomes a point cache: Nuke shows the bind pose otherwise ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "skel.usdc").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/skel_scene.usda", options);
+        CHECK(rep.ok);
+        const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(options.outputPath);
+        const pxr::UsdAttribute points =
+            stage->GetPrimAtPath(pxr::SdfPath("/Root/Quad")).GetAttribute(pxr::TfToken("points"));
+        pxr::VtArray<pxr::GfVec3f> first, last;
+        CHECK(points.GetNumTimeSamples() >= 2);
+        CHECK(points.Get(&first, 1.0) && points.Get(&last, 10.0));
+        CHECK(!first.empty() && first[0][0] < -1.0f);  // carried left by the joint at frame 1
+        CHECK(!last.empty() && last[0][0] > 0.0f);     // and right at frame 10
+        // no longer a SkelRoot: nothing skins the baked points a second time
+        CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root")).GetTypeName() == "Xform");
+        CHECK(Reported(rep, "skeletal animation baked"));
+    }
+
+    // --- a Z-up scene is stood up ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "zup.usdc").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/zup_scene.usda", options);
+        CHECK(rep.ok);
+        const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(options.outputPath);
+        CHECK(pxr::UsdGeomGetStageUpAxis(stage) == pxr::UsdGeomTokens->y);
+        pxr::UsdGeomBBoxCache cache(pxr::UsdTimeCode::Default(), {pxr::UsdGeomTokens->default_});
+        const pxr::GfRange3d box = cache.ComputeWorldBound(stage->GetPrimAtPath(pxr::SdfPath("/Root"))).ComputeAlignedRange();
+        CHECK(box.GetSize()[1] > 1.9 && box.GetSize()[2] < 0.7);  // tall along Y now
+        CHECK(Reported(rep, "the scene was Z-up"));
+
+        options.outputPath = (outDir / "zup_asis.usdc").string();
+        options.nukeCompat = false;
+        CHECK(usdprep::ExtractPrims(FIXTURE_DIR "/zup_scene.usda", options).ok);
+        CHECK(pxr::UsdGeomGetStageUpAxis(pxr::UsdStage::Open(options.outputPath)) == pxr::UsdGeomTokens->z);
     }
 
     // --- the presets ---
