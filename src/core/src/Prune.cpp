@@ -61,6 +61,10 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         extractOptions.materialPurpose = options.materialPurpose;
         extractOptions.stripRenderContexts = options.stripRenderContexts;
         extractOptions.stripUnusedMaterials = options.stripUnusedMaterials;
+        extractOptions.animation = options.animation;
+        extractOptions.frameStart = options.frameStart;
+        extractOptions.frameEnd = options.frameEnd;
+        extractOptions.staticFrame = options.staticFrame;
         Report r = ExtractPrims(inputPath, extractOptions);
         for (const auto& e : r.entries) {
             if (e.action == "extract") {
@@ -140,6 +144,8 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
     DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
     StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
                    options.stripUnusedMaterials);
+    TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
+                  options.staticFrame);
 
     if (options.setDefaultPrim && !flat->GetDefaultPrim()) {
         // Prefer the input's own default prim when it survived the prune.

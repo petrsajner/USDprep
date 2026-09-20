@@ -1,11 +1,15 @@
 #pragma once
 
+#include <limits>
 #include <string>
 #include <vector>
 
 #include <usdprep/Report.h>
 
 namespace usdprep {
+
+// "Use the stage's own frame" for the animation options below.
+constexpr double kStageFrame = std::numeric_limits<double>::quiet_NaN();
 
 struct ExtractOptions {
     std::vector<std::string> primPaths;  // subtree roots to keep
@@ -26,6 +30,14 @@ struct ExtractOptions {
     std::string materialPurpose = "all";
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
+    // Animation: "all" leaves it, "range" drops time samples outside
+    // [frameStart, frameEnd] (the stage's own range when kStageFrame),
+    // "static" bakes staticFrame (the range start when kStageFrame) as
+    // the only value.
+    std::string animation = "all";
+    double frameStart = kStageFrame;
+    double frameEnd = kStageFrame;
+    double staticFrame = kStageFrame;
 };
 
 // Copy the given subtrees (with their ancestors and carried dependencies)

@@ -8,6 +8,7 @@
 //   usdcut inspect <scene> [--report out.json]
 //   usdcut presets [<name>]
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -65,7 +66,12 @@ void PrintUsage() {
         << "                         material for preview and a heavy one for full\n"
         << "                         renders, keep which (default: the recipe's)\n"
         << "  --keep-render-contexts keep outputs:arnold:* and the like, with their shaders\n"
-        << "  --keep-unused-materials keep materials nothing binds\n\n"
+        << "  --keep-unused-materials keep materials nothing binds\n"
+        << "  --animation <mode>     all | range | static: keep every time sample, only\n"
+        << "                         the shot range, or bake one frame (default: recipe's)\n"
+        << "  --frames <a>-<b>       the range for --animation range (default: the\n"
+        << "                         scene's own start/end)\n"
+        << "  --frame <n>            the frame for --animation static (default: range start)\n\n"
         << "filters (comma-separated lists):\n"
         << "  types                  schema names (Mesh, Camera, SphereLight) or the\n"
         << "                         family name 'light'; case-insensitive\n"
@@ -117,6 +123,10 @@ struct CommonOptions {
     std::string materials;  // empty = the recipe decides
     bool keepRenderContexts = false;
     bool keepUnusedMaterials = false;
+    std::string animation;  // empty = the recipe decides
+    double frameStart = usdprep::kStageFrame;
+    double frameEnd = usdprep::kStageFrame;
+    double staticFrame = usdprep::kStageFrame;
 };
 
 // Resolve --preset / --recipe into one recipe. False = already reported.
@@ -153,6 +163,10 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (!common.materials.empty()) options->materialPurpose = common.materials;
     if (common.keepRenderContexts) options->stripRenderContexts = false;
     if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
+    if (!common.animation.empty()) options->animation = common.animation;
+    if (!std::isnan(common.frameStart)) options->frameStart = common.frameStart;
+    if (!std::isnan(common.frameEnd)) options->frameEnd = common.frameEnd;
+    if (!std::isnan(common.staticFrame)) options->staticFrame = common.staticFrame;
     options->outputPath = common.output;
 }
 
@@ -196,6 +210,28 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             common.keepRenderContexts = true;
         } else if (a == "--keep-unused-materials") {
             common.keepUnusedMaterials = true;
+        } else if (a == "--animation") {
+            if (++i >= args.size()) { error = "--animation needs all, range or static"; return -1; }
+            common.animation = args[i];
+            if (common.animation != "all" && common.animation != "range" &&
+                common.animation != "static") {
+                error = "--animation must be all, range or static";
+                return -1;
+            }
+        } else if (a == "--frames") {
+            if (++i >= args.size()) { error = "--frames needs <start>-<end>"; return -1; }
+            char* rest = nullptr;
+            common.frameStart = std::strtod(args[i].c_str(), &rest);
+            if (rest == args[i].c_str() || *rest != '-') {
+                error = "--frames needs <start>-<end>, e.g. 1001-1050";
+                return -1;
+            }
+            common.frameEnd = std::strtod(rest + 1, nullptr);
+            if (common.animation.empty()) common.animation = "range";
+        } else if (a == "--frame") {
+            if (++i >= args.size()) { error = "--frame needs a frame number"; return -1; }
+            common.staticFrame = std::strtod(args[i].c_str(), nullptr);
+            if (common.animation.empty()) common.animation = "static";
         } else if (!a.empty() && a[0] == '-') {
             error = "unknown option: " + a;
             return -1;

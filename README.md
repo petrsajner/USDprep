@@ -81,6 +81,12 @@ one; `all` leaves both. Render-context outputs (`outputs:arnold:*` and the
 like) go with the shaders only they reach, and materials nothing binds go
 too — `--keep-render-contexts` / `--keep-unused-materials` opt out.
 
+**Animation.** `--animation range` (the Nuke preset) drops time samples
+outside the scene's start/end — a simulation's pre-roll, typically —
+keeping one bracketing sample on each side; `--frames 1010-1020` picks the
+range yourself; `--frame 1030` bakes a still and drops the animation;
+`--animation all` leaves every sample alone.
+
 **Filters** (`select`, `--drop-type`, `--drop-purpose`): types are schema
 names (`Mesh`, `Camera`, `SphereLight`) plus the family name `light`;
 purposes are `default`, `render`, `proxy`, `guide` and are resolved, so a

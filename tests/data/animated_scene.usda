@@ -1,0 +1,46 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    endTimeCode = 1005
+    framesPerSecond = 24
+    metersPerUnit = 0.01
+    startTimeCode = 1001
+    timeCodesPerSecond = 24
+    upAxis = "Y"
+)
+
+# Fixture for Trim: a mesh animated well beyond the shot range (pre-roll
+# from 990) with samples every few frames, and a static one next to it.
+def Xform "Root"
+{
+    def Mesh "Cloth"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points.timeSamples = {
+            990: [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)],
+            995: [(0, 0.5, 0), (1, 0.5, 0), (1, 0.5, 1), (0, 0.5, 1)],
+            1000: [(0, 1, 0), (1, 1, 0), (1, 1, 1), (0, 1, 1)],
+            1001: [(0, 1.1, 0), (1, 1.1, 0), (1, 1.1, 1), (0, 1.1, 1)],
+            1002: [(0, 1.2, 0), (1, 1.2, 0), (1, 1.2, 1), (0, 1.2, 1)],
+            1005: [(0, 1.5, 0), (1, 1.5, 0), (1, 1.5, 1), (0, 1.5, 1)],
+            1010: [(0, 2, 0), (1, 2, 0), (1, 2, 1), (0, 2, 1)],
+        }
+        float3[] extent.timeSamples = {
+            990: [(0, 0, 0), (1, 0, 1)],
+            1010: [(0, 2, 0), (1, 2, 1)],
+        }
+        double3 xformOp:translate.timeSamples = {
+            995: (0, 0, 0),
+            1003: (0, 0, 3),
+        }
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Mesh "Rock"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(2, 0, 0), (3, 0, 0), (3, 0, 1), (2, 0, 1)]
+    }
+}

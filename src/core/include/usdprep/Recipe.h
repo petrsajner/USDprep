@@ -26,6 +26,12 @@ struct Recipe {
     std::string materialPurpose = "all";
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
+    // Animation: "all" | "range" | "static", with the frames as in
+    // ExtractOptions (kStageFrame = the stage's own).
+    std::string animation = "all";
+    double frameStart = kStageFrame;
+    double frameEnd = kStageFrame;
+    double staticFrame = kStageFrame;
 };
 
 // Names of the built-in presets, in the order they are offered.

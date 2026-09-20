@@ -50,11 +50,42 @@ the two presets. Two older fixtures had their UDIM shader unconnected
 to the surface — the reachability rule removed it, rightly; they are
 wired properly now.
 
+## Trim: the animation diet (2026-09-20)
+
+`animation: all | range | static`, on the flattened output, at the Sdf
+layer level:
+
+- **range** — time samples outside [start, end] are erased; the stage's
+  own start/end unless `frameStart`/`frameEnd` say otherwise. One
+  bracketing sample is kept on each side so the boundary frames still
+  interpolate. Nuke preset. Raw: all.
+- **static** — one frame (`staticFrame`, default the range start) is
+  read through the stage (so it interpolates where it falls between
+  samples), then becomes the attribute's only value; the stage's range
+  collapses to that frame.
+
+CLI: `--animation`, `--frames a-b` (implies range), `--frame n` (implies
+static). Panel: Advanced → Animation: everything / shot range (with the
+scene's frames in the label) / one frame + a frame field.
+
+**Measured, ALab stoat outfit, nuke preset (preview materials +):**
+
+| animation | package | vs. 91.1 MB |
+|---|---|---|
+| all | 71.8 MB | −21 % |
+| range 1004–1057 (468 pre-roll samples gone) | 60.2 MB | −34 % |
+| frames 1010–1020 | 20.7 MB | −77 % |
+| still, frame 1030 | 7.1 MB | **−92 %** |
+
+So the M3 target (≥70 %) is met for a still or a short range; a full
+54-frame cloth simulation stays what it is until Simplify.
+
+Fixture `animated_scene.usda` (pre-roll from 990, samples every few
+frames, a static mesh beside it) and `test_trim` pin the bracketing, the
+explicit range, the interpolated still and the recipe round trip.
+
 ## Next
 
-- **Trim** — clip time samples to a frame range, or bake one frame.
-  The outfit says everything: geometry animation is where a
-  Nuke-bound asset's weight is once the hero textures are gone.
 - Preview cards (`model:cardTexture*`) still travel into the package
   (six PNGs on the outfit): attribute-level strip.
 - Textures op (OIIO) and Simplify (meshoptimizer) after that.

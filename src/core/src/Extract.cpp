@@ -73,7 +73,7 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     // if missing.
     const bool hasFilters = !options.dropTypes.empty() || !options.dropPurposes.empty();
     const bool hasStrip = options.materialPurpose != "all" || options.stripRenderContexts ||
-                          options.stripUnusedMaterials;
+                          options.stripUnusedMaterials || options.animation != "all";
     if (options.setDefaultPrim || hasFilters || hasStrip) {
         const UsdStageRefPtr flat = UsdStage::Open(tmpPath);
         if (!flat) {
@@ -83,6 +83,8 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
         DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
         StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
                        options.stripUnusedMaterials);
+        TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
+                      options.staticFrame);
         if (options.setDefaultPrim && AuthorDefaultPrim(flat, roots.front())) {
             rep.Info("defaultPrim",
                      "set to top-level ancestor of " + roots.front().GetAsString());

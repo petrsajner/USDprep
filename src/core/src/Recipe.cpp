@@ -1,5 +1,6 @@
 #include <usdprep/Recipe.h>
 
+#include <cmath>
 #include <fstream>
 #include <sstream>
 
@@ -28,6 +29,7 @@ const Recipe& NukePreset() {
         r.materialPurpose = "preview";
         r.stripRenderContexts = true;
         r.stripUnusedMaterials = true;
+        r.animation = "range";
         return r;
     }();
     return recipe;
@@ -46,6 +48,7 @@ const Recipe& RawPreset() {
         r.materialPurpose = "all";
         r.stripRenderContexts = false;
         r.stripUnusedMaterials = false;
+        r.animation = "all";
         return r;
     }();
     return recipe;
@@ -192,6 +195,22 @@ bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
             ok = ReadBool(value, &loaded.stripRenderContexts, key, error);
         } else if (key == "stripUnusedMaterials") {
             ok = ReadBool(value, &loaded.stripUnusedMaterials, key, error);
+        } else if (key == "animation") {
+            const std::string choice = value.IsString() ? value.GetString() : "";
+            if (choice != "all" && choice != "range" && choice != "static") {
+                *error = "'animation' must be \"all\", \"range\" or \"static\"";
+                return false;
+            }
+            loaded.animation = choice;
+        } else if (key == "frameStart" || key == "frameEnd" || key == "staticFrame") {
+            if (!value.IsReal() && !value.IsInt()) {
+                *error = "'" + key + "' must be a number";
+                return false;
+            }
+            const double frame = value.IsInt() ? static_cast<double>(value.GetInt64()) : value.GetReal();
+            (key == "frameStart" ? loaded.frameStart
+             : key == "frameEnd" ? loaded.frameEnd
+                                 : loaded.staticFrame) = frame;
         } else if (warnings) {
             warnings->push_back("recipe key '" + key +
                                 "' is not understood by this version and was ignored");
@@ -214,8 +233,13 @@ std::string RecipeToJson(const Recipe& recipe) {
     os << "  \"dropPurposes\": " << JsonStringList(recipe.dropPurposes) << ",\n";
     os << "  \"materialPurpose\": \"" << JsonEscape(recipe.materialPurpose) << "\",\n";
     os << "  \"stripRenderContexts\": " << (recipe.stripRenderContexts ? "true" : "false") << ",\n";
-    os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << "\n";
-    os << "}\n";
+    os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << ",\n";
+    os << "  \"animation\": \"" << JsonEscape(recipe.animation) << "\"";
+    // frames only when set: JSON has no way to say "the stage's own"
+    if (!std::isnan(recipe.frameStart)) os << ",\n  \"frameStart\": " << recipe.frameStart;
+    if (!std::isnan(recipe.frameEnd)) os << ",\n  \"frameEnd\": " << recipe.frameEnd;
+    if (!std::isnan(recipe.staticFrame)) os << ",\n  \"staticFrame\": " << recipe.staticFrame;
+    os << "\n}\n";
     return os.str();
 }
 
@@ -228,6 +252,10 @@ void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
     options->materialPurpose = recipe.materialPurpose;
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
+    options->animation = recipe.animation;
+    options->frameStart = recipe.frameStart;
+    options->frameEnd = recipe.frameEnd;
+    options->staticFrame = recipe.staticFrame;
 }
 
 void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
@@ -239,6 +267,10 @@ void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
     options->materialPurpose = recipe.materialPurpose;
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
+    options->animation = recipe.animation;
+    options->frameStart = recipe.frameStart;
+    options->frameEnd = recipe.frameEnd;
+    options->staticFrame = recipe.staticFrame;
 }
 
 }  // namespace usdprep

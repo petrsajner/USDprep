@@ -3,7 +3,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -388,6 +391,84 @@ inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::s
     }
     if (materialsRemoved > 0) {
         rep.Info("materials", std::to_string(materialsRemoved) + " unused material(s) removed");
+    }
+}
+
+inline std::string FormatFrame(double frame) {
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%g", frame);
+    return buffer;
+}
+
+// Animation on a diet, on the flattened output. `mode` is "all" (leave
+// it), "range" (time samples outside [start, end] go — a simulation's
+// pre-roll, typically — keeping one bracketing sample on each side so the
+// boundary frames still interpolate) or "static" (one frame becomes the
+// value, no samples remain). A NaN frame means "the stage's own".
+inline void TrimAnimation(Report& rep, const UsdStageRefPtr& flat, const std::string& mode,
+                          double frameStart, double frameEnd, double staticFrame) {
+    if (mode != "range" && mode != "static") return;
+    const SdfLayerHandle layer = flat->GetRootLayer();
+    double start = std::isnan(frameStart) ? flat->GetStartTimeCode() : frameStart;
+    double end = std::isnan(frameEnd) ? flat->GetEndTimeCode() : frameEnd;
+    if (end < start) std::swap(start, end);
+
+    // Gather first: editing the layer while traversing it is asking for
+    // trouble.
+    std::vector<SdfPath> animated;
+    layer->Traverse(SdfPath::AbsoluteRootPath(), [&](const SdfPath& path) {
+        if (path.IsPropertyPath() && layer->GetNumTimeSamplesForPath(path) > 0) {
+            animated.push_back(path);
+        }
+    });
+    if (animated.empty()) return;
+
+    if (mode == "static") {
+        const double frame = std::isnan(staticFrame) ? start : staticFrame;
+        size_t baked = 0;
+        for (const SdfPath& path : animated) {
+            const UsdAttribute attr = flat->GetAttributeAtPath(path);
+            if (!attr) continue;
+            VtValue value;
+            if (!attr.Get(&value, UsdTimeCode(frame))) continue;  // interpolated where needed
+            attr.Clear();  // the default and every sample
+            if (attr.Set(value)) ++baked;
+        }
+        flat->SetStartTimeCode(frame);
+        flat->SetEndTimeCode(frame);
+        rep.Info("trim", "frame " + FormatFrame(frame) + " baked as the only value of " +
+                             std::to_string(baked) + " animated attribute(s); the animation is gone");
+        return;
+    }
+
+    size_t erased = 0;
+    size_t attributes = 0;
+    for (const SdfPath& path : animated) {
+        const std::set<double> samples = layer->ListTimeSamplesForPath(path);
+        double before = -std::numeric_limits<double>::infinity();
+        double after = std::numeric_limits<double>::infinity();
+        for (const double t : samples) {
+            if (t < start) before = t;                 // the last one before the range
+            if (t > end && after == std::numeric_limits<double>::infinity()) after = t;
+        }
+        bool touched = false;
+        for (const double t : samples) {
+            if (t >= start && t <= end) continue;
+            if (t == before || t == after) continue;   // bracketing: kept
+            layer->EraseTimeSample(path, t);
+            ++erased;
+            touched = true;
+        }
+        if (touched) ++attributes;
+    }
+    if (!std::isnan(frameStart) || !std::isnan(frameEnd)) {
+        flat->SetStartTimeCode(start);
+        flat->SetEndTimeCode(end);
+    }
+    if (erased > 0) {
+        rep.Info("trim", std::to_string(erased) + " time sample(s) outside frames " +
+                             FormatFrame(start) + "-" + FormatFrame(end) + " removed from " +
+                             std::to_string(attributes) + " attribute(s)");
     }
 }
 

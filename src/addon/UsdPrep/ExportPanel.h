@@ -46,9 +46,14 @@ private:
     bool _setDefaultPrim = true;
     bool _relinkTextures = true;
     int _materials = 0;  // 0 = preview (light), 1 = full (hero), 2 = all
+    int _animation = 1;  // 0 = everything, 1 = the shot range, 2 = one frame
+    double _staticFrame = 0.0;
+    bool _staticFrameSet = false;  // typed by the artist, else the scene's start
 
     char _outputPath[512] = "";
     int _format = 0;  // 0 = .usdz package, 1 = .usdc layer
+    double _sceneStart = 0.0;  // the scene's frame range, for the labels
+    double _sceneEnd = 0.0;
     pxr::UsdStageRefPtr _suggestedFor;
     std::string _suggestedName;  // the object the current suggestion is named after
     bool _pathEdited = false;    // the artist typed or browsed: stop suggesting

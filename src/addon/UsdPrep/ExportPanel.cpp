@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -186,6 +187,9 @@ void ExportPanel::ChoosePreset(int choice, const std::string& recipePath) {
     _setDefaultPrim = _recipe.setDefaultPrim;
     _relinkTextures = _recipe.relinkTextures;
     _materials = _recipe.materialPurpose == "preview" ? 0 : _recipe.materialPurpose == "full" ? 1 : 2;
+    _animation = _recipe.animation == "all" ? 0 : _recipe.animation == "static" ? 2 : 1;
+    _staticFrameSet = !std::isnan(_recipe.staticFrame);
+    if (_staticFrameSet) _staticFrame = _recipe.staticFrame;
 
     usdtweak::SetAddonString(kAddonId, "preset",
                              choice >= 0 && choice < static_cast<int>(presets.size())
@@ -444,6 +448,28 @@ void ExportPanel::DrawAdvanced() {
                           "of the size.");
     }
 
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Animation");
+    ImGui::SameLine();
+    char rangeLabel[96];
+    std::snprintf(rangeLabel, sizeof(rangeLabel), "Shot range only (%g-%g)", _sceneStart, _sceneEnd);
+    const char* animationChoices[] = {"Everything - every time sample", rangeLabel, "One frame - a still"};
+    const float frameWidth = ImGui::CalcTextSize("00000000").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    ImGui::SetNextItemWidth(_animation == 2 ? -frameWidth - ImGui::GetStyle().ItemSpacing.x : -1.0f);
+    ImGui::Combo("##animation", &_animation, animationChoices, 3);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Simulations often carry frames from before the shot starts\n"
+                          "(pre-roll); the shot range drops those. A still bakes one\n"
+                          "frame and drops the animation altogether.");
+    }
+    if (_animation == 2) {
+        ImGui::SameLine();
+        if (!_staticFrameSet) _staticFrame = _sceneStart;
+        ImGui::SetNextItemWidth(frameWidth);
+        if (ImGui::InputDouble("##frame", &_staticFrame, 0.0, 0.0, "%g")) _staticFrameSet = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("The frame to keep.");
+    }
+
     std::string removed;
     for (const std::string& t : _recipe.dropTypes) removed += (removed.empty() ? "" : ", ") + t;
     for (const std::string& p : _recipe.dropPurposes) {
@@ -455,7 +481,11 @@ void ExportPanel::DrawAdvanced() {
     if (_recipe.stripUnusedMaterials) {
         removed += (removed.empty() ? "" : ", ") + std::string("unused materials");
     }
-    if (!removed.empty()) ImGui::TextDisabled("This preset also removes: %s", removed.c_str());
+    if (!removed.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("This preset also removes: %s", removed.c_str());
+        ImGui::PopStyleColor();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +499,8 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     options.setDefaultPrim = _setDefaultPrim;
     options.relinkTextures = _relinkTextures;
     options.materialPurpose = _materials == 0 ? "preview" : _materials == 1 ? "full" : "all";
+    options.animation = _animation == 0 ? "all" : _animation == 1 ? "range" : "static";
+    if (_animation == 2) options.staticFrame = _staticFrame;
     options.outputPath = _outputPath;
     for (const SdfPath& p : targets) options.primPaths.push_back(p.GetAsString());
 
@@ -534,6 +566,8 @@ void ExportPanel::DrawRun(const UsdStageRefPtr& stage, const std::vector<SdfPath
 void ExportPanel::Draw(const UsdStageRefPtr& stage, const std::vector<SdfPath>& selectionRoots) {
     const float top = ImGui::GetCursorPosY();
     const std::vector<SdfPath>& targets = _list.empty() ? selectionRoots : _list;
+    _sceneStart = stage->GetStartTimeCode();
+    _sceneEnd = stage->GetEndTimeCode();
 
     ImGui::Separator();
     DrawList(selectionRoots);

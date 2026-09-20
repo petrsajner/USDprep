@@ -25,6 +25,11 @@ struct PruneOptions {
     std::string materialPurpose = "all";
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
+    // Animation, as in ExtractOptions.
+    std::string animation = "all";
+    double frameStart = kStageFrame;
+    double frameEnd = kStageFrame;
+    double staticFrame = kStageFrame;
 };
 
 // Shrink a scene: either keep-only (implemented as a masked extraction) or
