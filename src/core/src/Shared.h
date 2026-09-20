@@ -394,6 +394,43 @@ inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::s
     }
 }
 
+// Draw-mode cards: a viewer's stand-in for an asset (six textures on a
+// box) that Nuke never draws, yet whose textures travel with every
+// export. The whole UsdGeomModelAPI draw-mode setup goes; the geometry
+// is right there.
+inline void StripDrawModeCards(Report& rep, const UsdStageRefPtr& flat) {
+    static const char* kDrawModeAttributes[] = {
+        "model:applyDrawMode",   "model:drawMode",        "model:drawModeColor",
+        "model:cardGeometry",    "model:cardTextureXPos", "model:cardTextureXNeg",
+        "model:cardTextureYPos", "model:cardTextureYNeg", "model:cardTextureZPos",
+        "model:cardTextureZNeg",
+    };
+    size_t prims = 0;
+    size_t textures = 0;
+    for (UsdPrim prim :
+         UsdPrimRange(flat->GetPseudoRoot(), UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
+        if (prim.IsPseudoRoot() || prim.IsInstanceProxy()) continue;
+        bool touched = false;
+        for (const char* name : kDrawModeAttributes) {
+            const TfToken token(name);
+            const UsdAttribute attr = prim.GetAttribute(token);
+            if (!attr || !attr.HasAuthoredValue()) continue;
+            SdfAssetPath asset;
+            if (attr.GetTypeName() == SdfValueTypeNames->Asset && attr.Get(&asset) &&
+                !asset.GetAssetPath().empty()) {
+                ++textures;
+            }
+            if (prim.RemoveProperty(token)) touched = true;
+        }
+        if (touched) ++prims;
+    }
+    if (prims > 0) {
+        rep.Info("cards", "preview-card setup removed from " + std::to_string(prims) +
+                              " object(s); " + std::to_string(textures) +
+                              " card texture(s) no longer needed");
+    }
+}
+
 inline std::string FormatFrame(double frame) {
     char buffer[32];
     std::snprintf(buffer, sizeof(buffer), "%g", frame);

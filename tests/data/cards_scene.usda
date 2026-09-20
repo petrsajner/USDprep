@@ -1,0 +1,33 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for the draw-mode cards: an asset with the six card textures
+# authored but never drawn (applyDrawMode false) - the way production
+# assets ship them.
+def Xform "Root" (
+    kind = "component"
+    prepend apiSchemas = ["GeomModelAPI"]
+)
+{
+    bool model:applyDrawMode = 0
+    uniform token model:cardGeometry = "cross"
+    asset model:cardTextureXNeg = @textures/checker.png@
+    asset model:cardTextureXPos = @textures/checker.png@
+    asset model:cardTextureYNeg = @textures/tile.1001.png@
+    asset model:cardTextureYPos = @textures/tile.1001.png@
+    asset model:cardTextureZNeg = @textures/tile.1002.png@
+    asset model:cardTextureZPos = @textures/tile.1002.png@
+    uniform token model:drawMode = "inherited"
+    float3 model:drawModeColor = (0.18, 0.18, 0.18)
+
+    def Mesh "Body"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+    }
+}

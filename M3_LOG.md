@@ -84,8 +84,28 @@ Fixture `animated_scene.usda` (pre-roll from 990, samples every few
 frames, a static mesh beside it) and `test_trim` pin the bracketing, the
 explicit range, the interpolated still and the recipe round trip.
 
+## Strip, part 2: draw-mode cards (2026-09-20)
+
+Every ALab asset carries the UsdGeomModelAPI card setup — six PNGs on
+`model:cardTexture*`, `drawMode = inherited`, `applyDrawMode = false` —
+so the cards are never drawn and the textures travel for nothing. The
+whole draw-mode family of attributes goes (`stripDrawModeCards`, nuke
+preset on, raw off, `--keep-cards` to keep it). The geometry is right
+there; Nuke draws that.
+
+**ALab projector, nuke preset: 4.56 MB → 686 KB** — one preview JPG
+inside the package instead of six card PNGs and a UDIM set.
+
+## What the environment does not have
+
+- **OpenImageIO** and **meshoptimizer** are not in the conda USD env.
+- USD's own `Hio` reads and writes PNG/JPG/EXR (and resamples on read),
+  so a **resolution cap** needs no new dependency. `.tex/.tx/.rat`
+  conversion does, and waits for the release build of USD with OIIO
+  (M4).
+- meshoptimizer would be vendored (MIT, a handful of files). Decimating
+  USD meshes with face-varying UVs is the hard part, not the library.
+
 ## Next
 
-- Preview cards (`model:cardTexture*`) still travel into the package
-  (six PNGs on the outfit): attribute-level strip.
 - Textures op (OIIO) and Simplify (meshoptimizer) after that.

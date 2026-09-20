@@ -30,6 +30,8 @@ struct ExtractOptions {
     std::string materialPurpose = "all";
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
+    // Draw-mode cards (a viewer's stand-in box with six textures) go too.
+    bool stripDrawModeCards = true;
     // Animation: "all" leaves it, "range" drops time samples outside
     // [frameStart, frameEnd] (the stage's own range when kStageFrame),
     // "static" bakes staticFrame (the range start when kStageFrame) as

@@ -79,7 +79,9 @@ light one for previews. `--materials preview` (what the Nuke preset does)
 keeps the light one and binds it for every purpose; `full` keeps the hero
 one; `all` leaves both. Render-context outputs (`outputs:arnold:*` and the
 like) go with the shaders only they reach, and materials nothing binds go
-too — `--keep-render-contexts` / `--keep-unused-materials` opt out.
+too — `--keep-render-contexts` / `--keep-unused-materials` opt out. The
+draw-mode card setup (six preview textures per asset that Nuke never
+draws) goes as well; `--keep-cards` keeps it.
 
 **Animation.** `--animation range` (the Nuke preset) drops time samples
 outside the scene's start/end — a simulation's pre-roll, typically —

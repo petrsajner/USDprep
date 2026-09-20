@@ -148,6 +148,36 @@ int main() {
         CHECK(out.textures.size() == 3);
     }
 
+    // --- draw-mode cards: the six textures a viewer's stand-in box would
+    //     use go with the setup; the geometry stays ---
+    {
+        const std::string cards = FIXTURE_DIR "/cards_scene.usda";
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "cards.usdc").string();
+        options.stripDrawModeCards = true;
+        const usdprep::Report rep = usdprep::ExtractPrims(cards, options);
+        CHECK(rep.ok);
+        const Output out = Inspect((outDir / "cards.usdc").string());
+        CHECK(out.textures.empty());
+        CHECK(Has(out.prims, "/Root/Body"));
+        const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open((outDir / "cards.usdc").string());
+        // the applied schema still defines the attribute; nothing is authored any more
+        CHECK(!stage->GetPrimAtPath(pxr::SdfPath("/Root"))
+                   .GetAttribute(pxr::TfToken("model:drawMode"))
+                   .HasAuthoredValue());
+        bool reported = false;
+        for (const usdprep::ReportEntry& e : rep.entries) {
+            if (e.action == "cards" && e.detail.find("6 card texture") != std::string::npos) reported = true;
+        }
+        CHECK(reported);
+
+        options.outputPath = (outDir / "cards_kept.usdc").string();
+        options.stripDrawModeCards = false;
+        CHECK(usdprep::ExtractPrims(cards, options).ok);
+        CHECK(Inspect((outDir / "cards_kept.usdc").string()).textures.size() == 6);
+    }
+
     // --- the presets say what they mean ---
     {
         usdprep::Recipe nuke;
@@ -155,11 +185,13 @@ int main() {
         CHECK(nuke.materialPurpose == "preview");
         CHECK(nuke.stripRenderContexts);
         CHECK(nuke.stripUnusedMaterials);
+        CHECK(nuke.stripDrawModeCards);
         usdprep::Recipe raw;
         usdprep::GetPreset("raw", &raw);
         CHECK(raw.materialPurpose == "all");
         CHECK(!raw.stripRenderContexts);
         CHECK(!raw.stripUnusedMaterials);
+        CHECK(!raw.stripDrawModeCards);
     }
 
     if (failures == 0) std::printf("test_strip: OK\n");

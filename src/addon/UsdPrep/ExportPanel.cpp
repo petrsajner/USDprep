@@ -481,6 +481,9 @@ void ExportPanel::DrawAdvanced() {
     if (_recipe.stripUnusedMaterials) {
         removed += (removed.empty() ? "" : ", ") + std::string("unused materials");
     }
+    if (_recipe.stripDrawModeCards) {
+        removed += (removed.empty() ? "" : ", ") + std::string("preview cards");
+    }
     if (!removed.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TextWrapped("This preset also removes: %s", removed.c_str());

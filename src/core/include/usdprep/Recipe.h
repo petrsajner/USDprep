@@ -26,6 +26,7 @@ struct Recipe {
     std::string materialPurpose = "all";
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
+    bool stripDrawModeCards = true;
     // Animation: "all" | "range" | "static", with the frames as in
     // ExtractOptions (kStageFrame = the stage's own).
     std::string animation = "all";

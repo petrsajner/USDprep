@@ -67,6 +67,8 @@ void PrintUsage() {
         << "                         renders, keep which (default: the recipe's)\n"
         << "  --keep-render-contexts keep outputs:arnold:* and the like, with their shaders\n"
         << "  --keep-unused-materials keep materials nothing binds\n"
+        << "  --keep-cards           keep the draw-mode card setup (six preview textures\n"
+        << "                         per asset that Nuke never draws)\n"
         << "  --animation <mode>     all | range | static: keep every time sample, only\n"
         << "                         the shot range, or bake one frame (default: recipe's)\n"
         << "  --frames <a>-<b>       the range for --animation range (default: the\n"
@@ -123,6 +125,7 @@ struct CommonOptions {
     std::string materials;  // empty = the recipe decides
     bool keepRenderContexts = false;
     bool keepUnusedMaterials = false;
+    bool keepCards = false;
     std::string animation;  // empty = the recipe decides
     double frameStart = usdprep::kStageFrame;
     double frameEnd = usdprep::kStageFrame;
@@ -163,6 +166,7 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (!common.materials.empty()) options->materialPurpose = common.materials;
     if (common.keepRenderContexts) options->stripRenderContexts = false;
     if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
+    if (common.keepCards) options->stripDrawModeCards = false;
     if (!common.animation.empty()) options->animation = common.animation;
     if (!std::isnan(common.frameStart)) options->frameStart = common.frameStart;
     if (!std::isnan(common.frameEnd)) options->frameEnd = common.frameEnd;
@@ -210,6 +214,8 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             common.keepRenderContexts = true;
         } else if (a == "--keep-unused-materials") {
             common.keepUnusedMaterials = true;
+        } else if (a == "--keep-cards") {
+            common.keepCards = true;
         } else if (a == "--animation") {
             if (++i >= args.size()) { error = "--animation needs all, range or static"; return -1; }
             common.animation = args[i];

@@ -29,6 +29,7 @@ const Recipe& NukePreset() {
         r.materialPurpose = "preview";
         r.stripRenderContexts = true;
         r.stripUnusedMaterials = true;
+        r.stripDrawModeCards = true;
         r.animation = "range";
         return r;
     }();
@@ -48,6 +49,7 @@ const Recipe& RawPreset() {
         r.materialPurpose = "all";
         r.stripRenderContexts = false;
         r.stripUnusedMaterials = false;
+        r.stripDrawModeCards = false;
         r.animation = "all";
         return r;
     }();
@@ -195,6 +197,8 @@ bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
             ok = ReadBool(value, &loaded.stripRenderContexts, key, error);
         } else if (key == "stripUnusedMaterials") {
             ok = ReadBool(value, &loaded.stripUnusedMaterials, key, error);
+        } else if (key == "stripDrawModeCards") {
+            ok = ReadBool(value, &loaded.stripDrawModeCards, key, error);
         } else if (key == "animation") {
             const std::string choice = value.IsString() ? value.GetString() : "";
             if (choice != "all" && choice != "range" && choice != "static") {
@@ -234,6 +238,7 @@ std::string RecipeToJson(const Recipe& recipe) {
     os << "  \"materialPurpose\": \"" << JsonEscape(recipe.materialPurpose) << "\",\n";
     os << "  \"stripRenderContexts\": " << (recipe.stripRenderContexts ? "true" : "false") << ",\n";
     os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << ",\n";
+    os << "  \"stripDrawModeCards\": " << (recipe.stripDrawModeCards ? "true" : "false") << ",\n";
     os << "  \"animation\": \"" << JsonEscape(recipe.animation) << "\"";
     // frames only when set: JSON has no way to say "the stage's own"
     if (!std::isnan(recipe.frameStart)) os << ",\n  \"frameStart\": " << recipe.frameStart;
@@ -252,6 +257,7 @@ void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
     options->materialPurpose = recipe.materialPurpose;
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
+    options->stripDrawModeCards = recipe.stripDrawModeCards;
     options->animation = recipe.animation;
     options->frameStart = recipe.frameStart;
     options->frameEnd = recipe.frameEnd;
@@ -267,6 +273,7 @@ void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
     options->materialPurpose = recipe.materialPurpose;
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
+    options->stripDrawModeCards = recipe.stripDrawModeCards;
     options->animation = recipe.animation;
     options->frameStart = recipe.frameStart;
     options->frameEnd = recipe.frameEnd;

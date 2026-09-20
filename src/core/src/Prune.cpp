@@ -61,6 +61,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         extractOptions.materialPurpose = options.materialPurpose;
         extractOptions.stripRenderContexts = options.stripRenderContexts;
         extractOptions.stripUnusedMaterials = options.stripUnusedMaterials;
+        extractOptions.stripDrawModeCards = options.stripDrawModeCards;
         extractOptions.animation = options.animation;
         extractOptions.frameStart = options.frameStart;
         extractOptions.frameEnd = options.frameEnd;
@@ -144,6 +145,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
     DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
     StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
                    options.stripUnusedMaterials);
+    if (options.stripDrawModeCards) StripDrawModeCards(rep, flat);
     TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
                   options.staticFrame);
 
