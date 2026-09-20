@@ -21,6 +21,10 @@ struct PruneOptions {
     bool deinstance = true;
     bool setDefaultPrim = true;
     bool relinkTextures = true;
+    // The material diet, as in ExtractOptions.
+    std::string materialPurpose = "all";
+    bool stripRenderContexts = true;
+    bool stripUnusedMaterials = true;
 };
 
 // Shrink a scene: either keep-only (implemented as a masked extraction) or

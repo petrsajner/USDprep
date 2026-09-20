@@ -60,7 +60,12 @@ void PrintUsage() {
         << "  --no-default-prim      do not author defaultPrim on the output\n"
         << "  --no-relink            .usdc/.usda: leave texture paths pointing at\n"
         << "                         the source tree instead of copying the files\n"
-        << "                         into a <name>_textures folder next to the output\n\n"
+        << "                         into a <name>_textures folder next to the output\n"
+        << "  --materials <which>    preview | full | all: where an object has a light\n"
+        << "                         material for preview and a heavy one for full\n"
+        << "                         renders, keep which (default: the recipe's)\n"
+        << "  --keep-render-contexts keep outputs:arnold:* and the like, with their shaders\n"
+        << "  --keep-unused-materials keep materials nothing binds\n\n"
         << "filters (comma-separated lists):\n"
         << "  types                  schema names (Mesh, Camera, SphereLight) or the\n"
         << "                         family name 'light'; case-insensitive\n"
@@ -109,6 +114,9 @@ struct CommonOptions {
     bool deinstanceGiven = false;
     bool setDefaultPrimGiven = false;
     bool relinkTexturesGiven = false;
+    std::string materials;  // empty = the recipe decides
+    bool keepRenderContexts = false;
+    bool keepUnusedMaterials = false;
 };
 
 // Resolve --preset / --recipe into one recipe. False = already reported.
@@ -142,6 +150,9 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (common.deinstanceGiven) options->deinstance = common.deinstance;
     if (common.setDefaultPrimGiven) options->setDefaultPrim = common.setDefaultPrim;
     if (common.relinkTexturesGiven) options->relinkTextures = common.relinkTextures;
+    if (!common.materials.empty()) options->materialPurpose = common.materials;
+    if (common.keepRenderContexts) options->stripRenderContexts = false;
+    if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
     options->outputPath = common.output;
 }
 
@@ -173,6 +184,18 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
         } else if (a == "--no-relink") {
             common.relinkTextures = false;
             common.relinkTexturesGiven = true;
+        } else if (a == "--materials") {
+            if (++i >= args.size()) { error = "--materials needs preview, full or all"; return -1; }
+            common.materials = args[i];
+            if (common.materials != "preview" && common.materials != "full" &&
+                common.materials != "all") {
+                error = "--materials must be preview, full or all";
+                return -1;
+            }
+        } else if (a == "--keep-render-contexts") {
+            common.keepRenderContexts = true;
+        } else if (a == "--keep-unused-materials") {
+            common.keepUnusedMaterials = true;
         } else if (!a.empty() && a[0] == '-') {
             error = "unknown option: " + a;
             return -1;

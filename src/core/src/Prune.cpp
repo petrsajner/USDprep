@@ -58,6 +58,9 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         extractOptions.deinstance = options.deinstance;
         extractOptions.setDefaultPrim = options.setDefaultPrim;
         extractOptions.relinkTextures = options.relinkTextures;
+        extractOptions.materialPurpose = options.materialPurpose;
+        extractOptions.stripRenderContexts = options.stripRenderContexts;
+        extractOptions.stripUnusedMaterials = options.stripUnusedMaterials;
         Report r = ExtractPrims(inputPath, extractOptions);
         for (const auto& e : r.entries) {
             if (e.action == "extract") {
@@ -135,6 +138,8 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
                                    " subtree(s) deleted from the flattened layer");
     }
     DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
+    StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
+                   options.stripUnusedMaterials);
 
     if (options.setDefaultPrim && !flat->GetDefaultPrim()) {
         // Prefer the input's own default prim when it survived the prune.

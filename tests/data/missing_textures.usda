@@ -27,6 +27,9 @@ def Xform "Root"
             {
                 uniform token info:id = "UsdPreviewSurface"
                 color3f inputs:diffuseColor.connect = </Root/Looks/PanelMaterial/DiffuseTexture.outputs:rgb>
+                float inputs:roughness.connect = </Root/Looks/PanelMaterial/TiledTexture.outputs:r>
+                float inputs:metallic.connect = </Root/Looks/PanelMaterial/LostTexture.outputs:r>
+                normal3f inputs:normal.connect = </Root/Looks/PanelMaterial/LostTiles.outputs:rgb>
                 token outputs:surface
             }
 
@@ -41,6 +44,7 @@ def Xform "Root"
             {
                 uniform token info:id = "UsdUVTexture"
                 asset inputs:file = @textures/tile.<UDIM>.png@
+                float outputs:r
                 float3 outputs:rgb
             }
 
@@ -48,6 +52,7 @@ def Xform "Root"
             {
                 uniform token info:id = "UsdUVTexture"
                 asset inputs:file = @textures/not_delivered.png@
+                float outputs:r
                 float3 outputs:rgb
             }
 

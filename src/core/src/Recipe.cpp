@@ -25,6 +25,9 @@ const Recipe& NukePreset() {
         r.setDefaultPrim = true;
         r.relinkTextures = true;
         r.dropPurposes = {"guide", "proxy"};
+        r.materialPurpose = "preview";
+        r.stripRenderContexts = true;
+        r.stripUnusedMaterials = true;
         return r;
     }();
     return recipe;
@@ -40,6 +43,9 @@ const Recipe& RawPreset() {
         r.deinstance = false;
         r.setDefaultPrim = false;
         r.relinkTextures = false;
+        r.materialPurpose = "all";
+        r.stripRenderContexts = false;
+        r.stripUnusedMaterials = false;
         return r;
     }();
     return recipe;
@@ -175,6 +181,17 @@ bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
             ok = ReadStringArray(value, &loaded.dropTypes, key, error);
         } else if (key == "dropPurposes") {
             ok = ReadStringArray(value, &loaded.dropPurposes, key, error);
+        } else if (key == "materialPurpose") {
+            const std::string choice = value.IsString() ? value.GetString() : "";
+            if (choice != "preview" && choice != "full" && choice != "all") {
+                *error = "'materialPurpose' must be \"preview\", \"full\" or \"all\"";
+                return false;
+            }
+            loaded.materialPurpose = choice;
+        } else if (key == "stripRenderContexts") {
+            ok = ReadBool(value, &loaded.stripRenderContexts, key, error);
+        } else if (key == "stripUnusedMaterials") {
+            ok = ReadBool(value, &loaded.stripUnusedMaterials, key, error);
         } else if (warnings) {
             warnings->push_back("recipe key '" + key +
                                 "' is not understood by this version and was ignored");
@@ -194,7 +211,10 @@ std::string RecipeToJson(const Recipe& recipe) {
     os << "  \"setDefaultPrim\": " << (recipe.setDefaultPrim ? "true" : "false") << ",\n";
     os << "  \"relinkTextures\": " << (recipe.relinkTextures ? "true" : "false") << ",\n";
     os << "  \"dropTypes\": " << JsonStringList(recipe.dropTypes) << ",\n";
-    os << "  \"dropPurposes\": " << JsonStringList(recipe.dropPurposes) << "\n";
+    os << "  \"dropPurposes\": " << JsonStringList(recipe.dropPurposes) << ",\n";
+    os << "  \"materialPurpose\": \"" << JsonEscape(recipe.materialPurpose) << "\",\n";
+    os << "  \"stripRenderContexts\": " << (recipe.stripRenderContexts ? "true" : "false") << ",\n";
+    os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << "\n";
     os << "}\n";
     return os.str();
 }
@@ -205,6 +225,9 @@ void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
     options->relinkTextures = recipe.relinkTextures;
     options->dropTypes = recipe.dropTypes;
     options->dropPurposes = recipe.dropPurposes;
+    options->materialPurpose = recipe.materialPurpose;
+    options->stripRenderContexts = recipe.stripRenderContexts;
+    options->stripUnusedMaterials = recipe.stripUnusedMaterials;
 }
 
 void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
@@ -213,6 +236,9 @@ void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
     options->relinkTextures = recipe.relinkTextures;
     options->dropTypes = recipe.dropTypes;
     options->dropPurposes = recipe.dropPurposes;
+    options->materialPurpose = recipe.materialPurpose;
+    options->stripRenderContexts = recipe.stripRenderContexts;
+    options->stripUnusedMaterials = recipe.stripUnusedMaterials;
 }
 
 }  // namespace usdprep

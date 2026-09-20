@@ -73,6 +73,14 @@ two lines you care about). Flags you type win over the recipe.
 the file and points the file at the copies, UDIM tile sets included —
 keep the two together, or pass `--no-relink` to leave the paths alone.
 
+**Materials.** Production assets often bind two materials per object: a
+heavy one for final renders (`material:binding:full`, 4K UDIM sets) and a
+light one for previews. `--materials preview` (what the Nuke preset does)
+keeps the light one and binds it for every purpose; `full` keeps the hero
+one; `all` leaves both. Render-context outputs (`outputs:arnold:*` and the
+like) go with the shaders only they reach, and materials nothing binds go
+too — `--keep-render-contexts` / `--keep-unused-materials` opt out.
+
 **Filters** (`select`, `--drop-type`, `--drop-purpose`): types are schema
 names (`Mesh`, `Camera`, `SphereLight`) plus the family name `light`;
 purposes are `default`, `render`, `proxy`, `guide` and are resolved, so a

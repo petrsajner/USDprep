@@ -1,0 +1,118 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for the material diet:
+# - PanelA binds a heavy material for full renders and a light one for
+#   preview (the production pattern)
+# - Multi has a universal UsdPreviewSurface output and an Arnold-only
+#   output with its own texture
+# - Orphan is bound by nothing
+def Xform "Root"
+{
+    def Scope "Geo"
+    {
+        def Mesh "PanelA" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding:full = </Root/Looks/Hero>
+            rel material:binding:preview = </Root/Looks/Light>
+        }
+
+        def Mesh "PanelB" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding = </Root/Looks/Multi>
+        }
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Hero"
+        {
+            token outputs:surface.connect = </Root/Looks/Hero/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Hero/Tex.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/checker.png@
+                float3 outputs:rgb
+            }
+        }
+
+        def Material "Light"
+        {
+            token outputs:surface.connect = </Root/Looks/Light/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Light/Tex.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/tile.1001.png@
+                float3 outputs:rgb
+            }
+        }
+
+        def Material "Multi"
+        {
+            token outputs:surface.connect = </Root/Looks/Multi/Preview.outputs:surface>
+            token outputs:arnold:surface.connect = </Root/Looks/Multi/Arnold.outputs:out>
+
+            def Shader "Preview"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.8, 0.2, 0.2)
+                token outputs:surface
+            }
+
+            def Shader "Arnold"
+            {
+                uniform token info:id = "arnold:standard_surface"
+                color3f inputs:base_color.connect = </Root/Looks/Multi/ArnoldTex.outputs:rgb>
+                token outputs:out
+            }
+
+            def Shader "ArnoldTex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/tile.1002.png@
+                float3 outputs:rgb
+            }
+        }
+
+        def Material "Orphan"
+        {
+            token outputs:surface.connect = </Root/Looks/Orphan/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                token outputs:surface
+            }
+        }
+    }
+}

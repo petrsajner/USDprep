@@ -21,6 +21,11 @@ struct Recipe {
     // Categories removed from the result (Select's vocabulary).
     std::vector<std::string> dropTypes;
     std::vector<std::string> dropPurposes;
+    // The material diet: "preview" | "full" | "all", plus the two cleanups
+    // (see ExtractOptions).
+    std::string materialPurpose = "all";
+    bool stripRenderContexts = true;
+    bool stripUnusedMaterials = true;
 };
 
 // Names of the built-in presets, in the order they are offered.

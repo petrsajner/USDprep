@@ -45,6 +45,7 @@ private:
     bool _deinstance = true;
     bool _setDefaultPrim = true;
     bool _relinkTextures = true;
+    int _materials = 0;  // 0 = preview (light), 1 = full (hero), 2 = all
 
     char _outputPath[512] = "";
     int _format = 0;  // 0 = .usdz package, 1 = .usdc layer

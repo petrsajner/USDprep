@@ -185,6 +185,7 @@ void ExportPanel::ChoosePreset(int choice, const std::string& recipePath) {
     _deinstance = _recipe.deinstance;
     _setDefaultPrim = _recipe.setDefaultPrim;
     _relinkTextures = _recipe.relinkTextures;
+    _materials = _recipe.materialPurpose == "preview" ? 0 : _recipe.materialPurpose == "full" ? 1 : 2;
 
     usdtweak::SetAddonString(kAddonId, "preset",
                              choice >= 0 && choice < static_cast<int>(presets.size())
@@ -426,14 +427,35 @@ void ExportPanel::DrawAdvanced() {
                                   : "Only applies to the .usdc format - a .usdz package\n"
                                     "always carries its textures inside.");
     }
-    if (!_recipe.dropTypes.empty() || !_recipe.dropPurposes.empty()) {
-        std::string removed;
-        for (const std::string& t : _recipe.dropTypes) removed += (removed.empty() ? "" : ", ") + t;
-        for (const std::string& p : _recipe.dropPurposes) {
-            removed += (removed.empty() ? "" : ", ") + p + " geometry";
-        }
-        ImGui::TextDisabled("This preset also removes: %s", removed.c_str());
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Materials");
+    ImGui::SameLine();
+    const char* materialChoices[] = {
+        "Light (preview) - small textures",
+        "Full quality - hero textures",
+        "Keep both",
+    };
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::Combo("##materials", &_materials, materialChoices, 3);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Production assets often carry two materials per object: a heavy\n"
+                          "one for final renders (4K UDIM textures) and a light one for\n"
+                          "previews. Nuke is happy with the light one, and it is a fraction\n"
+                          "of the size.");
     }
+
+    std::string removed;
+    for (const std::string& t : _recipe.dropTypes) removed += (removed.empty() ? "" : ", ") + t;
+    for (const std::string& p : _recipe.dropPurposes) {
+        removed += (removed.empty() ? "" : ", ") + p + " geometry";
+    }
+    if (_recipe.stripRenderContexts) {
+        removed += (removed.empty() ? "" : ", ") + std::string("renderer-only shader networks");
+    }
+    if (_recipe.stripUnusedMaterials) {
+        removed += (removed.empty() ? "" : ", ") + std::string("unused materials");
+    }
+    if (!removed.empty()) ImGui::TextDisabled("This preset also removes: %s", removed.c_str());
 }
 
 // ---------------------------------------------------------------------------
@@ -446,6 +468,7 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     options.deinstance = _deinstance;
     options.setDefaultPrim = _setDefaultPrim;
     options.relinkTextures = _relinkTextures;
+    options.materialPurpose = _materials == 0 ? "preview" : _materials == 1 ? "full" : "all";
     options.outputPath = _outputPath;
     for (const SdfPath& p : targets) options.primPaths.push_back(p.GetAsString());
 

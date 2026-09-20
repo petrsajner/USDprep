@@ -69,15 +69,20 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     }
 
     // Post-pass on the flattened output: drop the categories the recipe
-    // asks for, then author defaultPrim if missing.
+    // asks for, put the materials on their diet, then author defaultPrim
+    // if missing.
     const bool hasFilters = !options.dropTypes.empty() || !options.dropPurposes.empty();
-    if (options.setDefaultPrim || hasFilters) {
+    const bool hasStrip = options.materialPurpose != "all" || options.stripRenderContexts ||
+                          options.stripUnusedMaterials;
+    if (options.setDefaultPrim || hasFilters || hasStrip) {
         const UsdStageRefPtr flat = UsdStage::Open(tmpPath);
         if (!flat) {
             rep.Fail("cannot reopen the flattened layer: " + tmpPath);
             return;
         }
         DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
+        StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
+                       options.stripUnusedMaterials);
         if (options.setDefaultPrim && AuthorDefaultPrim(flat, roots.front())) {
             rep.Info("defaultPrim",
                      "set to top-level ancestor of " + roots.front().GetAsString());

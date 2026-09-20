@@ -28,6 +28,9 @@
 #include <pxr/usd/usd/primFlags.h>
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
+#include <pxr/usd/usdShade/material.h>
+#include <pxr/usd/usdShade/materialBindingAPI.h>
+#include <pxr/usd/usdShade/tokens.h>
 #include <pxr/usd/usdShade/udimUtils.h>
 #include <pxr/usd/usdUtils/coalescingDiagnosticDelegate.h>
 #include <pxr/usd/usdUtils/dependencies.h>
@@ -237,6 +240,154 @@ inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
         rep.Warn("strip", std::to_string(insideInstances) +
                               " match(es) live inside instanced content and were kept "
                               "— deleting them requires de-instancing");
+    }
+}
+
+// The material diet, on an already flattened stage:
+//
+// 1. Where a prim binds one material for "full" renders and another for
+//    "preview" (the production pattern: hero UDIM sets vs. small JPGs),
+//    keep the one asked for and bind it for every purpose, so whatever
+//    Nuke asks for it gets the light one. `purpose` is "preview", "full"
+//    or "all" (leave both).
+// 2. Material outputs for a specific render context (outputs:arnold:*,
+//    outputs:ri:*, outputs:mtlx:*) are dropped, and with them every shader
+//    only they reached. The universal surface/displacement/volume stay.
+// 3. Materials nothing binds any more are removed.
+//
+// Textures only the removed shaders referenced disappear with them, which
+// is where the weight goes.
+inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::string& purpose,
+                           bool stripRenderContexts, bool stripUnused) {
+    const bool choose = purpose == "preview" || purpose == "full";
+    if (!choose && !stripRenderContexts && !stripUnused) return;
+    const auto shown = UsdTraverseInstanceProxies(UsdPrimDefaultPredicate);
+
+    // ----- 1. one material per prim, the purpose that was asked for -----
+    size_t rebound = 0;
+    if (choose) {
+        const TfToken wanted(purpose);
+        const TfToken other = purpose == "preview" ? UsdShadeTokens->full : UsdShadeTokens->preview;
+        for (UsdPrim prim : UsdPrimRange(flat->GetPseudoRoot(), shown)) {
+            if (prim.IsPseudoRoot() || prim.IsInstanceProxy()) continue;
+            UsdShadeMaterialBindingAPI binding(prim);
+            const UsdRelationship wantedRel = binding.GetDirectBindingRel(wanted);
+            const UsdRelationship otherRel = binding.GetDirectBindingRel(other);
+            if (!wantedRel && !otherRel) continue;
+            SdfPathVector targets;
+            if (wantedRel) wantedRel.GetTargets(&targets);
+            // nothing for the wanted purpose: the other one is all there is
+            if (targets.empty() && otherRel) otherRel.GetTargets(&targets);
+            const UsdShadeMaterial material(
+                targets.empty() ? UsdPrim() : flat->GetPrimAtPath(targets.front()));
+            if (!material) continue;
+            UsdShadeMaterialBindingAPI::Apply(prim);
+            UsdShadeMaterialBindingAPI(prim).Bind(material, UsdShadeTokens->fallbackStrength,
+                                                  UsdShadeTokens->allPurpose);
+            if (wantedRel) prim.RemoveProperty(wantedRel.GetName());
+            if (otherRel) prim.RemoveProperty(otherRel.GetName());
+            ++rebound;
+        }
+    }
+
+    // ----- 2. render-context outputs and the shaders only they reach ---
+    size_t contextsRemoved = 0;
+    size_t shadersRemoved = 0;
+    std::vector<UsdPrim> materials;
+    for (const UsdPrim& prim : UsdPrimRange(flat->GetPseudoRoot(), shown)) {
+        if (!prim.IsInstanceProxy() && prim.IsA<UsdShadeMaterial>()) materials.push_back(prim);
+    }
+    if (stripRenderContexts) {
+        for (UsdPrim materialPrim : materials) {
+            std::vector<UsdAttribute> outputs;
+            for (const UsdAttribute& attr : materialPrim.GetAttributes()) {
+                const std::string name = attr.GetName().GetString();
+                if (name.rfind("outputs:", 0) != 0) continue;
+                const std::string terminal = name.substr(name.rfind(':') + 1);
+                if (terminal != "surface" && terminal != "displacement" && terminal != "volume") continue;
+                const bool universal = name == "outputs:" + terminal;
+                if (universal) continue;
+                outputs.push_back(attr);
+            }
+            for (const UsdAttribute& attr : outputs) {
+                if (materialPrim.RemoveProperty(attr.GetName())) ++contextsRemoved;
+            }
+
+            // What the remaining outputs still reach, following connections.
+            std::set<SdfPath> reachable;
+            std::vector<SdfPath> frontier;
+            for (const UsdAttribute& attr : materialPrim.GetAttributes()) {
+                SdfPathVector sources;
+                if (attr.GetConnections(&sources)) {
+                    for (const SdfPath& s : sources) frontier.push_back(s.GetPrimPath());
+                }
+            }
+            while (!frontier.empty()) {
+                const SdfPath path = frontier.back();
+                frontier.pop_back();
+                if (!reachable.insert(path).second) continue;
+                const UsdPrim node = flat->GetPrimAtPath(path);
+                if (!node) continue;
+                for (const UsdAttribute& attr : node.GetAttributes()) {
+                    SdfPathVector sources;
+                    if (attr.GetConnections(&sources)) {
+                        for (const SdfPath& s : sources) frontier.push_back(s.GetPrimPath());
+                    }
+                }
+            }
+            std::vector<SdfPath> orphans;
+            for (const UsdPrim& node : UsdPrimRange(materialPrim, shown)) {
+                if (node == materialPrim || node.IsInstanceProxy()) continue;
+                const TfToken type = node.GetTypeName();
+                if (type != "Shader" && type != "NodeGraph") continue;
+                if (!reachable.count(node.GetPath())) orphans.push_back(node.GetPath());
+            }
+            // deepest first, so a removed subtree is not visited again
+            std::sort(orphans.begin(), orphans.end(),
+                      [](const SdfPath& a, const SdfPath& b) { return a.GetPathElementCount() > b.GetPathElementCount(); });
+            for (const SdfPath& path : orphans) {
+                if (flat->GetPrimAtPath(path) && flat->RemovePrim(path)) ++shadersRemoved;
+            }
+        }
+    }
+
+    // ----- 3. materials nothing binds --------------------------------------
+    size_t materialsRemoved = 0;
+    if (stripUnused) {
+        std::set<SdfPath> bound;
+        for (const UsdPrim& prim : UsdPrimRange(flat->GetPseudoRoot(), shown)) {
+            for (const UsdRelationship& rel : prim.GetRelationships()) {
+                if (rel.GetName().GetString().rfind("material:binding", 0) != 0) continue;
+                SdfPathVector targets;
+                rel.GetTargets(&targets);
+                for (const SdfPath& t : targets) bound.insert(t);
+            }
+        }
+        for (const UsdPrim& materialPrim : materials) {
+            const SdfPath path = materialPrim.GetPath();
+            if (bound.count(path)) continue;
+            // a material bound from inside another material's subtree is
+            // still a material; anything that targets it keeps it
+            if (flat->GetPrimAtPath(path) && flat->RemovePrim(path)) ++materialsRemoved;
+        }
+    }
+
+    if (rebound > 0) {
+        rep.Info("materials", std::to_string(rebound) + " binding(s) switched to the " + purpose +
+                                  " material; the " +
+                                  (purpose == "preview" ? "full-quality" : "preview") +
+                                  " one is no longer used");
+    }
+    if (contextsRemoved > 0) {
+        rep.Info("materials", std::to_string(contextsRemoved) +
+                                  " renderer-specific material output(s) removed");
+    }
+    if (shadersRemoved > 0) {
+        rep.Info("materials", std::to_string(shadersRemoved) +
+                                  " shader(s) nothing connects to any more removed");
+    }
+    if (materialsRemoved > 0) {
+        rep.Info("materials", std::to_string(materialsRemoved) + " unused material(s) removed");
     }
 }
 

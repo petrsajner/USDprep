@@ -18,6 +18,14 @@ struct ExtractOptions {
     // and proxy geometry a production asset carries (Select's vocabulary).
     std::vector<std::string> dropTypes;
     std::vector<std::string> dropPurposes;
+    // The material diet. materialPurpose: "preview" keeps the light
+    // material where a prim has one for preview and one for full renders,
+    // "full" the heavy one, "all" both. Render-context outputs
+    // (outputs:arnold:*) and the shaders only they reach, and materials
+    // nothing binds, go when the two flags are set.
+    std::string materialPurpose = "all";
+    bool stripRenderContexts = true;
+    bool stripUnusedMaterials = true;
 };
 
 // Copy the given subtrees (with their ancestors and carried dependencies)
