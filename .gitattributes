@@ -1,1 +1,7 @@
 *.patch -text
+*.pdf binary
+*.png binary
+*.jpg binary
+*.exr binary
+*.abc binary
+*.usdc binary
