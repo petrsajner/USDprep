@@ -68,28 +68,13 @@ int ObjectCount(const UsdStageRefPtr& stage) {
     return count;
 }
 
-// Simple mode, applied at every start: a compositor opens the program to
-// the 3D view and this panel, nothing else. Whatever else they need they
-// open from the Windows / Tools menus, for this session - better than
-// starting in a crowded editor they cannot find their way around. Our own
-// panel is opened, too, should it have been closed.
-void ApplySimpleLayoutOnce() {
-    static int frame = 0;
-    static bool focused = false;
-    ++frame;
-    // Our tab comes to the front once - but only when no dialog is open.
-    // usdtweak's splash screen is a modal popup; taking the focus while it
-    // is up closes the popup behind usdtweak's back, and its dialog then
-    // blocks every later one (no file browser, no About, no Preferences).
-    if (frame >= 3 && !focused &&
-        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
-        ImGui::SetWindowFocus(kPanelTitle);
-        focused = true;
-    }
-    if (frame != 2) return;
-
-    // The program is USDprep; usdtweak, which it is built on, keeps its
-    // credit in the About box.
+// Simple mode, at every start: this is USDprep for Nuke, and it opens to
+// the 3D view and this panel - always, whatever was open or closed last
+// time. usdtweak's editor underneath is neither hidden away nor offered:
+// its panels are in the Windows menu for whoever looks for them, for the
+// session. Called by usdtweak once, on the first frame, whether our window
+// is open or not (the onStartup hook of our usdtweak patch).
+void StartTidy() {
     if (GLFWwindow* window = glfwGetCurrentContext()) {
         glfwSetWindowTitle(window, "USDprep " USDPREP_VERSION_STRING);
     }
@@ -115,7 +100,7 @@ void ApplySimpleLayoutOnce() {
         settings._showViewport3 = false;
         settings._showViewport4 = false;
     }
-    // the windows of other addons (shader registry inspector and the like) as well
+    // the windows of other addons go, ours comes - also when it was closed last time
     for (const auto& addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
         if (addon.kind != UsdTweakAddon::Kind::Window) continue;
         usdtweak::SetAddonBool(addon.id, "open", addon.id == kAddonId);
@@ -129,6 +114,20 @@ void ApplySimpleLayoutOnce() {
         usdtweak::SetAddonString(kAddonId, "layoutVersion", kLayoutVersion);
     }
     usdtweak::PersistSettings();
+}
+
+// Our tab comes to the front once - but only when no dialog is open.
+// usdtweak's splash screen is a modal popup; taking the focus while it is
+// up closes the popup behind usdtweak's back, and its dialog then blocks
+// every later one (no file browser, no About, no Preferences).
+void FocusOnceWhenQuiet() {
+    static int frame = 0;
+    static bool focused = false;
+    if (++frame >= 3 && !focused &&
+        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+        ImGui::SetWindowFocus(kPanelTitle);
+        focused = true;
+    }
 }
 
 // usdtweak switches the content browser on every time a stage is opened.
@@ -147,7 +146,7 @@ void KeepContentBrowserHidden(const UsdStageRefPtr& stage) {
 }
 
 void DrawPrepPanel() {
-    ApplySimpleLayoutOnce();
+    FocusOnceWhenQuiet();
 
     const UsdStageRefPtr stage = usdtweak::GetCurrentStage();
     KeepContentBrowserHidden(stage);
@@ -239,6 +238,7 @@ TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, UsdPrep) {
     addon.kind = UsdTweakAddon::Kind::Window;
     addon.defaultOpen = true;
     addon.draw = &DrawPrepPanel;
+    addon.onStartup = &StartTidy;
     UsdTweakAddonRegistry::GetInstance().Add(std::move(addon));
 
     // Help > About: the product first, then what it is built on.

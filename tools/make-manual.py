@@ -160,14 +160,13 @@ story += picture("app_start.png", WIDTH, "USDprep after opening a scene: the 3D 
 story += [p("That is the whole workflow. The rest of this manual explains the choices you can make on the way, "
             "what USDprep changes in the file and why, and what to do with an older Nuke."),
           p("USDprep and usdtweak", H2),
-          p("USDprep is built on top of <b>usdtweak</b>, a complete open-source USD editor by Cyril Pichard. "
-            "To keep things simple for compositing work, USDprep starts with most of that editor out of sight: "
-            "you see the 3D view and the <i>Prep for Nuke</i> panel, and nothing else. Nothing was removed, "
-            "though. Every usdtweak function is still there and works - the scene outliner, the property and "
-            "layer editors, the timeline, the text editor, saving and editing USD layers. Open any of them from "
-            "the <b>Windows</b> menu when you need them. They stay open for the session; the next time USDprep "
-            "starts it is tidy again - the 3D view and the panel, so nobody opens into a crowded editor. "
-            "If you closed the <i>Prep for Nuke</i> panel itself, the <b>Tools</b> menu brings it back."),
+          p("USDprep is built on top of <b>usdtweak</b>, an open-source USD editor by Cyril Pichard, and it is "
+            "made for one job: getting USD scenes into Nuke. It always starts the same way - the 3D view and the "
+            "<i>Prep for Nuke</i> panel, nothing else, whatever was open the last time."),
+          p("The editor underneath has not been removed and it works: its panels (scene outliner, property and "
+            "layer editors, timeline, text editor) are in the <b>Windows</b> menu and stay open until you close "
+            "the program. USDprep does not build on them and this manual does not cover them. If a USD editor is "
+            "what you need, install usdtweak itself."),
           p("The version you are running is shown in the window title, at the right end of the panel's second "
             "row, and in <b>Help &gt; About</b>.", SMALL),
           PageBreak()]

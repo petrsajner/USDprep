@@ -149,11 +149,16 @@ Help > About and on every page of the manual. The manual has a section
 "USDprep and usdtweak": built on it, most of the editor starts hidden,
 nothing was removed - Windows menu for its panels, Tools menu for ours.
 
-**Simple mode at every start** (Petr: "I would rather have the user open a
-panel when they need it than open into a crowded UI they cannot read").
-It used to be applied once per installation; now every start closes
-usdtweak's panels and the windows of other addons, keeps Viewport1 and
-opens our panel. What the user opens stays for the session.
+**Always the 3D view and our panel** (Petr: "this is USDprep for Nuke; we
+do not hide usdtweak, but we do not offer it either - whoever wants
+something else installs plain usdtweak"). Every start closes usdtweak's
+panels and the windows of other addons, keeps Viewport1 and opens our
+panel - also when it had been closed: the tidy-up runs in an `onStartup`
+hook added to usdtweak's addon descriptor by our patch, called once on the
+first frame whether the addon's window is open or not. Checked from a
+settings file with our panel closed and outliner, property editor and debug
+window open: the program came up with the 3D view and the panel. What the
+user opens stays for the session.
 
 ## Slice 5: v0.9.0 - manual, plan, and a third round of measurements
 

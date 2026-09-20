@@ -1,5 +1,5 @@
 diff --git a/src/Editor.cpp b/src/Editor.cpp
-index f35443a..88ba3ea 100644
+index f35443a..4c82f94 100644
 --- a/src/Editor.cpp
 +++ b/src/Editor.cpp
 @@ -221,6 +221,14 @@ struct AboutModalDialog : public ModalDialog {
@@ -17,6 +17,36 @@ index f35443a..88ba3ea 100644
          char buf[256];
          snprintf(buf, sizeof(buf), "usdtweak pre-alpha version %s", GetBuildDate());
          textShadowed(buf);
+@@ -1306,6 +1314,15 @@ void Editor::Draw() {
+     }
+ 
+ 
++    // Addons that want a say in how the editor starts get it once, before anything of theirs is drawn.
++    static bool addonsStarted = false;
++    if (!addonsStarted) {
++        addonsStarted = true;
++        for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
++            if (addon.onStartup) addon.onStartup();
++        }
++    }
++
+     // Draw every registered addon that is a window-kind addon and currently open.
+     for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
+         if (addon.kind != UsdTweakAddon::Kind::Window || !addon.draw) continue;
+diff --git a/src/addons/AddonRegistry.h b/src/addons/AddonRegistry.h
+index 9d91ce7..b2fd376 100644
+--- a/src/addons/AddonRegistry.h
++++ b/src/addons/AddonRegistry.h
+@@ -31,6 +31,9 @@ struct UsdTweakAddon {
+     std::function<void()> activate;       // Kind::Action: fired from the menu
+ 
+     std::function<bool()> isAvailable;    // optional; if returns false the menu item is greyed
++    std::function<void()> onStartup;      // optional; called once, on the first frame, whether the
++                                          // addon's window is open or not (a product built on
++                                          // usdtweak arranges the editor for its users here)
+     bool defaultOpen = false;             // Kind::Window only
+     ImGuiWindowFlags windowFlags = 0;     // Kind::Window only
+ };
 diff --git a/src/addons/Api.cpp b/src/addons/Api.cpp
 index 98dfc68..b39ea7a 100644
 --- a/src/addons/Api.cpp
