@@ -135,11 +135,20 @@ instances of 387 prototypes, nuke preset, one frame):
   them; the .obj/.abc export walks instance proxies.
 - The file is no smaller with instancing kept: `.usdc` stores identical
   arrays once, so de-instanced copies cost nothing on disk. What
-  instancing can save is Nuke's memory and time (6.2 M points instead of
-  12.7 M in this set) - **not measured yet**: Nuke's licence was not
-  available for that run (an earlier attempt gave a JPEG read error on a
-  different texture in 16.1 and in 17.0, which needs a second look).
-  Until then the default stays de-instanced, the verified path.
+  instancing could save is Nuke's memory and time - and measured, it
+  does the opposite on a big scene:
+
+| ALab set, ScanlineRender2, one frame | Nuke 16.1v4 | Nuke 17.0v1 |
+|---|---|---|
+| de-instanced (each alone, fresh process) | 10.3 s | 11.7 s |
+| instancing kept, 1431 instances | **fails**: `Jpeg read error: Too many open files` | **fails**, same error |
+| instancing kept, one bench, 78 instances | 2.6 s, textured | - |
+
+  Nuke opens the textures per instance and runs out of file handles; the
+  failing texture is a different one every run. So **de-instancing stays
+  the default, for a measured reason**. Kept instancing is still there as
+  a switch (small selections are fine), and the report warns above 300
+  instances.
 
 **"Whole scene (A)"** framed the bounding box of everything - in ALab
 that is the house and its garden, with the lab a detail inside. It now

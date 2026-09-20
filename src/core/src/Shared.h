@@ -1042,6 +1042,16 @@ inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
         rep.Warn("verify", "cannot reopen output for verification: " + err);
     } else {
         rep.after = info.counts;
+        // Measured in Nuke 16.1 and 17.0: a bench with 78 instances renders
+        // fine, ALab's whole set with 1431 stops at "Jpeg read error: Too
+        // many open files" - Nuke opens the textures per instance. The
+        // de-instanced file of the same set renders, and is no larger
+        // (.usdc stores identical data once).
+        if (info.counts.instances > 300) {
+            rep.Warn("nuke", std::to_string(info.counts.instances) +
+                                 " instances kept: Nuke runs out of open files on heavily instanced scenes "
+                                 "(it failed at 1431, 78 were fine) - de-instance for Nuke; the file does not grow");
+        }
     }
     if (asObj) {
         const bool written = ExportMeshFile(rep, outputPath, requestedPath, frame);

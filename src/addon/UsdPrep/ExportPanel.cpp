@@ -445,8 +445,10 @@ void ExportPanel::DrawAdvanced() {
     if (!ImGui::CollapsingHeader("Advanced")) return;
     ImGui::Checkbox("De-instance", &_deinstance);
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Turns USD instancing into plain, standalone objects so the\n"
-                          "file reads the same everywhere. Recommended.");
+        ImGui::SetTooltip("Turns USD instancing into plain, standalone objects. Recommended:\n"
+                          "Nuke reads instancing, but on a big scene (over a thousand\n"
+                          "instances) its render stops with \"Too many open files\".\n"
+                          "The file does not get any larger by it.");
     }
     ImGui::Checkbox("Set main object", &_setDefaultPrim);
     if (ImGui::IsItemHovered()) {

@@ -56,7 +56,7 @@ column is enough.
 | implicit shapes: Sphere, Cube, Cylinder, Cone, Capsule | ❌ not drawn | **gap** |
 | BasisCurves | ❌ not drawn | (hair, wires) |
 | Points | ✅ | |
-| native instancing (`instanceable`) | ✅ | de-instancing is not needed for Nuke |
+| native instancing (`instanceable`) | ✅ small scenes (78 instances: fine) · ❌ big ones: at 1431 instances the render stops with `Too many open files` | de-instance for Nuke; the `.usdc` does not grow |
 | PointInstancer | ✅ | |
 | `upAxis = "Z"` | ❌ not converted, the scene lies on its back | **gap** |
 | `metersPerUnit` | ignored, units are taken as they are | |
@@ -180,9 +180,8 @@ row was re-rendered in Nuke 16.1 and 17.0 after the conversion.
 
 Still open:
 
-- **De-instancing is not needed for Nuke** and is the size trap on big
-  sets; it could default to off when nothing inside an instance has to be
-  edited (strip/atlas/compat inside prototypes needs a look first).
+- De-instancing: settled by measurement - it stays the default (see the
+  instancing row above and `M4_LOG.md`, slice 4).
 - Curves as tubes or cards, if a show needs hair or wires in comp.
 - Baking skinning evaluates the whole animation before the trim cuts it;
   fine for shots, slow for very long takes.
