@@ -7,8 +7,8 @@
 //   "/Car/Body/Chrome" is still where the chrome binding lives.
 // - Implicit shapes (Sphere, Cube, Cylinder, Cone, Capsule) are not drawn
 //   at all. They become meshes, tessellated by USD's own generators.
-// - BasisCurves are not drawn either; there is no faithful cheap
-//   substitute, so they are only named in the report.
+// - BasisCurves and Volumes are not drawn either; there is no faithful
+//   cheap substitute, so they are only named in the report.
 
 #include "Shared.h"
 
@@ -355,7 +355,7 @@ bool ShapeToMesh(UsdPrim prim) {
 
 void MakeGeometryNukeReadable(Report& rep, const UsdStageRefPtr& flat) {
     std::vector<UsdPrim> meshes, shapes;
-    std::vector<std::string> curves;
+    std::vector<std::string> curves, volumes;
     for (const UsdPrim& prim : flat->Traverse()) {
         const TfToken type = prim.GetTypeName();
         if (prim.IsA<UsdGeomMesh>()) {
@@ -364,6 +364,8 @@ void MakeGeometryNukeReadable(Report& rep, const UsdStageRefPtr& flat) {
             shapes.push_back(prim);
         } else if (prim.IsA<UsdGeomCurves>()) {
             curves.push_back(prim.GetPath().GetString());
+        } else if (type == "Volume") {
+            volumes.push_back(prim.GetPath().GetString());
         }
     }
 
@@ -396,6 +398,11 @@ void MakeGeometryNukeReadable(Report& rep, const UsdStageRefPtr& flat) {
     if (!meshed.empty()) {
         rep.Info("nuke", std::to_string(meshed.size()) +
                              " implicit shape(s) turned into meshes - Nuke does not draw them: " + NameList(meshed));
+    }
+    if (!volumes.empty()) {
+        rep.Warn("nuke", std::to_string(volumes.size()) +
+                             " volume(s) (smoke, clouds) are in the file but Nuke's 3D render does not draw them: " +
+                             NameList(volumes));
     }
     if (!curves.empty()) {
         rep.Warn("nuke", std::to_string(curves.size()) +

@@ -625,5 +625,168 @@
   "frames": [
    1
   ]
+ },
+ "light_distant_default": {
+  "file": "light_distant_default.usda",
+  "question": "DistantLight, no rotation (USD: shines down -Z, onto the quad that faces +Z)",
+  "expect": "green if lit",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_distant_rotY180": {
+  "file": "light_distant_rotY180.usda",
+  "question": "DistantLight turned 180 about Y (USD: shines away from the quad)",
+  "expect": "green if lit",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_distant_rotX45": {
+  "file": "light_distant_rotX45.usda",
+  "question": "DistantLight tilted 45 degrees down",
+  "expect": "green if lit",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_distant_nointensity": {
+  "file": "light_distant_nointensity.usda",
+  "question": "DistantLight with no intensity authored (UsdLux default 50000)",
+  "expect": "green if lit",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_rough_10": {
+  "file": "shade_rough_10.usda",
+  "question": "roughness 0.1 under a light at the camera",
+  "expect": "the lower the roughness, the higher the peak",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_rough_50": {
+  "file": "shade_rough_50.usda",
+  "question": "roughness 0.5 under a light at the camera",
+  "expect": "the lower the roughness, the higher the peak",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_rough_90": {
+  "file": "shade_rough_90.usda",
+  "question": "roughness 0.9 under a light at the camera",
+  "expect": "the lower the roughness, the higher the peak",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_rough_tex": {
+  "file": "shade_rough_tex.usda",
+  "question": "roughness from a texture: left smooth, right rough",
+  "expect": "left and right halves differ",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_metal_0": {
+  "file": "shade_metal_0.usda",
+  "question": "metallic 0, orange base colour",
+  "expect": "metal: darker diffuse, tinted highlight",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_metal_1": {
+  "file": "shade_metal_1.usda",
+  "question": "metallic 1, orange base colour",
+  "expect": "metal: darker diffuse, tinted highlight",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_normal_none": {
+  "file": "shade_normal_none.usda",
+  "question": "no normal map, light from the +X side",
+  "expect": "reference",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "shade_normal_map": {
+  "file": "shade_normal_map.usda",
+  "question": "normal map leaning the normals towards the light",
+  "expect": "brighter than shade_normal_none if the map is used",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "tex_space_raw": {
+  "file": "tex_space_raw.usda",
+  "question": "8-bit grey 128, sourceColorSpace = raw",
+  "expect": "raw: 0.50, sRGB: 0.22",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "tex_space_sRGB": {
+  "file": "tex_space_sRGB.usda",
+  "question": "8-bit grey 128, sourceColorSpace = sRGB",
+  "expect": "raw: 0.50, sRGB: 0.22",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "tex_space_auto": {
+  "file": "tex_space_auto.usda",
+  "question": "8-bit grey 128, sourceColorSpace = auto",
+  "expect": "raw: 0.50, sRGB: 0.22",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "tex_space_omitted": {
+  "file": "tex_space_omitted.usda",
+  "question": "8-bit grey 128, sourceColorSpace = (not authored)",
+  "expect": "raw: 0.50, sRGB: 0.22",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "skel_blendshape": {
+  "file": "skel_blendshape.usda",
+  "question": "a blend shape slides the quad from left (frame 1) to right (frame 10)",
+  "expect": "moves if blend shapes are evaluated; stays left if not",
+  "light": false,
+  "frames": [
+   1,
+   10
+  ]
+ },
+ "vol_openvdb": {
+  "file": "vol_openvdb.usda",
+  "question": "a Volume with an OpenVDB density field (smoke)",
+  "expect": "anything drawn at all",
+  "light": false,
+  "frames": [
+   1
+  ]
  }
 }

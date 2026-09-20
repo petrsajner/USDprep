@@ -90,6 +90,9 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
         AtlasUdimTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
                           options.maxTextureSize);
     }
+    if (options.nukeCompat) {
+        CompensateRawTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures));
+    }
         if (options.stripDrawModeCards) StripDrawModeCards(rep, flat);
         TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
                       options.staticFrame);

@@ -88,15 +88,15 @@ int main() {
         // the light Nuke reads stays a light; the others become axes that
         // keep their name, their place and their settings
         CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Bulb")).GetTypeName() == "SphereLight");
-        const pxr::UsdPrim sun = stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Sun"));
-        CHECK(sun.GetTypeName() == "Xform");
-        CHECK(sun.GetAttribute(pxr::TfToken("inputs:intensity")).HasAuthoredValue());
-        CHECK(sun.GetAttribute(pxr::TfToken("xformOp:rotateXYZ")).HasAuthoredValue());
-        CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Panel")).GetTypeName() == "Xform");
-        CHECK(Reported(rep, "light /Root/Lights/Sun (DistantLight) replaced by an axis"));
+        CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Sun")).GetTypeName() == "DistantLight");
+        const pxr::UsdPrim panel = stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Panel"));
+        CHECK(panel.GetTypeName() == "Xform");
+        CHECK(panel.GetAttribute(pxr::TfToken("inputs:width")).HasAuthoredValue());
+        CHECK(panel.GetAttribute(pxr::TfToken("xformOp:translate")).HasAuthoredValue());
         CHECK(Reported(rep, "light /Root/Lights/Panel (RectLight) replaced by an axis"));
-        CHECK(Reported(rep, "1 light(s) kept"));
-        CHECK(rep.after.lights == 1);
+        CHECK(!Reported(rep, "/Root/Lights/Sun"));
+        CHECK(Reported(rep, "2 light(s) kept"));
+        CHECK(rep.after.lights == 2);
     }
 
     // --- the nuke preset: lights and proxies are simply not there ---
@@ -128,7 +128,7 @@ int main() {
         const usdprep::Report rep = usdprep::ExtractPrims(scene, options);
         CHECK(rep.ok);
         const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(options.outputPath);
-        CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Sun")).GetTypeName() == "DistantLight");
+        CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Lights/Panel")).GetTypeName() == "RectLight");
         CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Looks/Both")).GetAttribute(pxr::TfToken("outputs:mtlx:surface")));
         CHECK(stage->GetPrimAtPath(pxr::SdfPath("/Root/Exotic")).GetRelationship(pxr::TfToken("material:binding")));
     }

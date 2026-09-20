@@ -532,9 +532,9 @@ void ExportPanel::DrawAdvanced() {
     ImGui::Checkbox("Include lights", &_includeLights);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Off by default: with a light in the file Nuke stops showing\n"
-                          "surfaces unlit and the picture goes dark. Switched on, sphere,\n"
-                          "disk and dome lights come along as lights; the types Nuke cannot\n"
-                          "read (distant, rect, cylinder...) become axes of the same name,\n"
+                          "surfaces unlit and the picture goes dark. Switched on, distant,\n"
+                          "sphere, disk and dome lights come along as lights; the types Nuke\n"
+                          "cannot read (rect, cylinder...) become axes of the same name,\n"
                           "in the same place, so you can rebuild them. The report lists them.");
     }
 

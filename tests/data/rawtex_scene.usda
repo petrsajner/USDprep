@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    upAxis = "Y"
+)
+def Xform "Root"
+{
+    def Mesh "Quad" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)]
+        normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+            interpolation = "vertex"
+        )
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "vertex"
+        )
+        uniform token subdivisionScheme = "none"
+        rel material:binding = </Root/Mat>
+    }
+    def Material "Mat"
+    {
+        token outputs:surface.connect = </Root/Mat/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.5, 0.5, 0.5)
+            float inputs:roughness.connect = </Root/Mat/Rough.outputs:r>
+            token outputs:surface
+        }
+
+        def Shader "Reader"
+        {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname = "st"
+            float2 outputs:result
+        }
+
+        def Shader "Rough"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @textures/grey128.png@
+            float2 inputs:st.connect = </Root/Mat/Reader.outputs:result>
+            token inputs:sourceColorSpace = "raw"
+            float3 outputs:rgb
+            float outputs:r
+        }
+    }
+    def SphereLight "L"
+    {
+        float inputs:intensity = 60
+        float inputs:radius = 0.3
+        double3 xformOp:translate = (0, 0, 6)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

@@ -170,6 +170,30 @@ int main() {
         CHECK(nukeWarning);
     }
 
+    // --- an 8-bit texture read as "raw" (roughness here): Nuke decodes it as
+    //     sRGB regardless, so the export carries a copy with the curve
+    //     applied once - 128 becomes 188, which Nuke decodes back to 0.50 ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "rawtex.usdc").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/rawtex_scene.usda", options);
+        CHECK(rep.ok);
+        const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(options.outputPath);
+        const std::string file = FileOf(stage, "/Root/Mat/Rough");
+        CHECK(fs::path(file).filename() == "grey128.nukedata.png");
+        const Pixels px = ReadImage(file);
+        CHECK(px.width == 8 && px.height == 8);
+        if (px.width == 8) CHECK(px.At(3, 3) == 0xbcbcbcu);
+        // the original is what it was
+        CHECK(ReadImage(FIXTURE_DIR "/textures/grey128.png").At(3, 3) == 0x808080u);
+
+        options.outputPath = (outDir / "rawtex_asis.usdc").string();
+        options.nukeCompat = false;
+        CHECK(usdprep::ExtractPrims(FIXTURE_DIR "/rawtex_scene.usda", options).ok);
+        CHECK(fs::path(FileOf(pxr::UsdStage::Open(options.outputPath), "/Root/Mat/Rough")).filename() == "grey128.png");
+    }
+
     // --- the presets ---
     {
         usdprep::Recipe nuke;

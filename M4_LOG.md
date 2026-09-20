@@ -112,6 +112,30 @@ everything else builds and an `.abc` output fails with a clear message).
 The bundle grew by `Imath.dll` - 98 binaries, 80 MB, installer 20 MB;
 `.abc` export was run from the bundle in a clean environment.
 
+## Slice 5: v0.9.0 - manual, plan, and a third round of measurements
+
+- Version 0.9.0. `STUDY_AND_PLAN.md` opens with a table of where the plan
+  ended up and why. The panel was driven format by format in the running
+  application (USD, Alembic, OBJ from the same selection); an `.abc` and an
+  `.obj` of the same name no longer share a script: `name_abc.nk`,
+  `name_obj.nk`, `name_abc_parts/`.
+- **User manual**: `tools/make-manual.py` builds
+  `docs/manual/USDprep_User_Manual.pdf` (10 pages, English, screenshots
+  taken with `tools/capture-window.ps1`); `make-bundle.py` rebuilds it and
+  puts it into the bundle, the installer adds a Start menu shortcut.
+  Installation is the last, short chapter - the installer leaves little to do.
+- **Shading inputs, colour spaces, blend shapes, volumes** measured in both
+  Nukes (`NUKE_COMPAT.md`): roughness, metallic and normal maps are used;
+  blend shapes are not evaluated (our bake covers them); volumes are not
+  drawn (reported); and every 8-bit texture is decoded as sRGB whatever
+  `sourceColorSpace` says - 8-bit data textures marked raw now get a
+  re-encoded copy (`RawTextures.cpp`; grey-128 roughness: peak 0.99 before,
+  0.06 after, equal to constant 0.5).
+- **Corrected: DistantLight works in Nuke** - the first probe used an
+  intensity of 3 on a scale whose default is 50000. Found because the ASWF
+  normal-map asset, lit by four distant lights, rendered lit. Distant lights
+  stay lights.
+
 ## Slice 4: de-instancing, measured; "Whole scene" that finds the scene
 
 **De-instancing.** The assumption was "de-instancing is the size trap,

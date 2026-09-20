@@ -319,7 +319,7 @@ story += [table([
     ["In the scene", "What Nuke would do", "What USDprep does"],
     ["Textures split into UDIM tiles", "Black material", "Joins the tiles into one texture and adjusts the "
                                                            "material to use it"],
-    ["Lights Nuke cannot use (distant, rectangular, cylinder...)", "Black or wrong lighting",
+    ["Lights Nuke cannot use (rectangular, cylinder...)", "Ignores them",
      "Replaces each by an axis of the same name in the same place (only when <i>Include lights</i> is on)"],
     ["Guide and proxy geometry", "Draws it on top of the real object", "Removes it, or hides it if you keep it"],
     ["MaterialX next to a standard material", "Black material", "Removes the MaterialX part"],
@@ -330,7 +330,11 @@ story += [table([
     ["One object with several materials on different faces", "Grey object",
      "Splits it into one object per material, inside a group with the original name"],
     ["Basic shapes (sphere, cube, cylinder, cone, capsule)", "Draws nothing", "Turns them into ordinary geometry"],
-    ["Curves (hair, whiskers, wires)", "Draws nothing", "Cannot be converted - the report tells you they are there"],
+    ["Shape animation (blend shapes, for example a face)", "Stays in its base shape", "Bakes it into the geometry"],
+    ["8-bit roughness, metallic and normal maps", "Reads the numbers wrong: surfaces too glossy, bumps bent",
+     "Writes corrected copies of those textures"],
+    ["Curves (hair, whiskers, wires) and volumes (smoke, clouds)", "Draws nothing",
+     "Cannot be converted - the report tells you they are there"],
 ], [52 * mm, 42 * mm, WIDTH - 94 * mm])]
 
 # -------------------------------------------------------- troubleshooting

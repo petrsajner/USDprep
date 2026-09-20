@@ -69,11 +69,13 @@ def measure(node, frame):
     alpha = 0.0
     xs, ys = [], []
     halves = {"left": [0.0, 0.0, 0.0, 0], "right": [0.0, 0.0, 0.0, 0]}
+    peak = 0.0
     for j in range(GRID):
         for i in range(GRID):
             x = (i + 0.5) * SIZE / GRID
             y = (j + 0.5) * SIZE / GRID
             r, g, b, a = (node.sample(c, x, y) for c in ("red", "green", "blue", "alpha"))
+            peak = max(peak, r, g, b)
             if a > 0.02 or max(r, g, b) > 0.02:
                 covered += 1
                 alpha += a
@@ -84,7 +86,7 @@ def measure(node, frame):
                 for k, v in enumerate((r, g, b)):
                     half[k] += v
                 half[3] += 1
-    out = {"coverage": round(covered / float(GRID * GRID), 3)}
+    out = {"coverage": round(covered / float(GRID * GRID), 3), "peak": round(peak, 3)}
     if covered:
         out["rgb"] = [round(s / covered, 3) for s in sums]
         out["alpha"] = round(alpha / covered, 3)

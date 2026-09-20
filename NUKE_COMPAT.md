@@ -76,8 +76,8 @@ column is enough.
 | Question | Nuke | |
 |---|---|---|
 | no light anywhere | surfaces show their plain colour (unlit) | the friendly default |
-| SphereLight, DiskLight, DomeLight in the file | used — and the unlit default is gone | a dome at production intensity blows out |
-| DistantLight in the file | counts as a light, contributes next to nothing → **black render** | |
+| DistantLight, SphereLight, DiskLight, DomeLight in the file | used — and the unlit default is gone | a dome at production intensity blows out |
+| DistantLight in the file | used, direction and falloff right - on UsdLux's own intensity scale (default 50000). **Corrected:** the first probe used intensity 3, which is next to nothing on that scale, and was misread as "gives nothing" | the ASWF normal-map test, lit by four distant lights, showed it |
 | RectLight, CylinderLight | ignored altogether | |
 | Camera in the file | ✅ through the Camera node's import (translate, focal) | |
 
@@ -150,6 +150,29 @@ Three things the classic 3D taught us, all handled in `MeshExport.cpp`:
   are moved home face by face (each corner has its own UV in these
   formats, so a face can move by whole tiles).
 
+## Shading inputs, colour spaces, blend shapes, volumes (third measurement)
+
+Probes `tools/nuke/make_probes_shading.py` (a sphere light at the camera,
+so roughness and normals show), plus the ASWF USD working group's test
+assets rendered before and after USDprep (`tools/nuke/make_material_tests.py`,
+`third_party/usd-wg-assets`, Apache-2.0). Same in 16.1v4 and 17.0v1.
+
+| Question | Nuke | |
+|---|---|---|
+| `roughness`, constant and from a texture | used: the highlight peak goes 59.7 / 0.06 / 0.04 for roughness 0.1 / 0.5 / 0.9 | |
+| `metallic` | used | |
+| normal map (`inputs:normal` from a texture, scale 2 / bias -1) | used | |
+| `sourceColorSpace` on an 8-bit texture | **ignored: every 8-bit texture is decoded as sRGB.** Grey 128 gives 0.216 whether it says raw, sRGB, auto or nothing | fine for colour; **wrong for data** |
+| 8-bit roughness map of grey 128 marked `raw` | behaves like roughness 0.22 (peak 0.99), not 0.5 (peak 0.06) | -> re-encoded copy, see below |
+| texture transforms, alpha blend modes and cutoffs, texture coordinates, PNG/JPEG variants (ASWF assets) | the prepared file renders like the original | |
+| UsdSkel **blend shapes** | not evaluated - the mesh stays in its base shape | -> baked with the skinning (checked: it moves after USDprep) |
+| `Volume` with an OpenVDB field | nothing is drawn by ScanlineRender2 | reported only |
+
+A correction that came out of this round: **DistantLight works.** The
+first probe gave it intensity 3; on UsdLux's scale a distant light's
+default is 50000, so 3 is darkness. At that scale Nuke lights the scene
+with it, direction and falloff right. It is kept as a light now.
+
 ## What the tool does about it
 
 The rule (Petr, 2026-09-20): stay as close as possible to what a 3D
@@ -167,7 +190,7 @@ row was re-rendered in Nuke 16.1 and 17.0 after the conversion.
 |---|---|---|---|
 | `.usdz` textures | output is `.usdc` + textures folder | — | ✅ |
 | `<UDIM>` sets | stitched into an atlas, `UsdTransform2d` in the material | — | ✅ |
-| lights (any light switches Nuke's unlit default off) | **left out** ("Include lights" / `--lights`) | sphere, disk and dome lights stay lights; distant, rect, cylinder and the rest become **axes of the same name**, position and settings still on them | ✅ |
+| lights (any light switches Nuke's unlit default off) | **left out** ("Include lights" / `--lights`) | distant, sphere, disk and dome lights stay lights; rect, cylinder and the rest become **axes of the same name**, position and settings still on them | ✅ |
 | guide / proxy geometry (drawn on top of the real thing) | removed | kept in the file but **hidden** | ✅ |
 | MaterialX output next to a standard surface (renders black) | removed with the renderer outputs | the MaterialX output alone is removed | ✅ |
 | material with no standard surface (the mesh disappears) | — | the mesh is **unbound** and shows its display colour; the material stays | ✅ |
@@ -176,6 +199,9 @@ row was re-rendered in Nuke 16.1 and 17.0 after the conversion.
 | `upAxis = Z` | top-level prims get `xformOp:rotateX:usdprepYUp = -90`, the stage says Y | | ✅ |
 | per-face materials (GeomSubset) | the mesh becomes a **group of the same name**, each material subset a mesh of the subset's name inside it (faces in no subset: `<mesh>_rest`); UVs, per-face and per-vertex data and animation follow | | ✅ |
 | Sphere, Cube, Cylinder, Cone, Capsule | turned into meshes (USD's own tessellation, 32 segments) | | ✅ |
+| 8-bit data textures marked `raw` (roughness, metallic, normal maps, masks) - Nuke decodes them as sRGB | a copy with the sRGB curve applied once (`name.nukedata.png`), so Nuke's decoding lands on the stored numbers; float textures need nothing | | ✅ |
+| UsdSkel blend shapes | baked into the point cache together with the skinning | | ✅ |
+| Volumes (OpenVDB) | **reported only** | | - |
 | BasisCurves | **reported only** — no faithful cheap substitute (ALab's stoat: 33 whisker curves) | | — |
 
 Still open:
@@ -185,6 +211,5 @@ Still open:
 - Curves as tubes or cards, if a show needs hair or wires in comp.
 - Baking skinning evaluates the whole animation before the trim cuts it;
   fine for shots, slow for very long takes.
-- Not probed yet: normal/roughness/metallic maps (they need a lit render
-  to judge), `.tx/.tex` textures, texture colour spaces, volumes, NURBS,
-  blend shapes, nested instancing with material overrides.
+- Not probed yet: compressed / half-float `.tx`, RenderMan `.tex`, NURBS,
+  nested instancing with material overrides, displacement.

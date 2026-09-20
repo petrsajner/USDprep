@@ -532,6 +532,10 @@ void MakeNukeReadable(Report& rep, const UsdStageRefPtr& flat);
 void AtlasUdimTextures(Report& rep, const UsdStageRefPtr& flat, const std::string& atlasDir,
                        int maxTileSize);
 
+// RawTextures.cpp: Nuke decodes every 8-bit texture as sRGB; 8-bit textures
+// a UsdUVTexture reads as "raw" get a pre-compensated copy under `folder`.
+void CompensateRawTextures(Report& rep, const UsdStageRefPtr& flat, const std::string& folder);
+
 // Where the atlases go: the scratch folder when the textures get copied
 // next to the output anyway, else straight into "<name>_textures".
 inline std::string AtlasDirFor(const std::string& outputPath, const std::string& tmpPath,

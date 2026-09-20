@@ -128,9 +128,10 @@ void MakeMaterialsRenderable(Report& rep, const UsdStageRefPtr& flat) {
 }
 
 // Lights that made it into the export (they are off in the nuke preset).
-// Nuke lights the scene with sphere, disk and dome lights; a distant light
-// gives it nothing but still switches the unlit default off - a black
-// render; rect and cylinder lights are ignored. The ones Nuke cannot use
+// Nuke lights the scene with distant, sphere, disk and dome lights (a
+// distant light on UsdLux's own intensity scale, where the default is
+// 50000 - a first probe with intensity 3 looked like "gives nothing");
+// rect and cylinder lights are ignored. The ones Nuke cannot use
 // become plain transforms of the same name, settings still on them, so
 // the light can be rebuilt in Nuke where it stood.
 void ReplaceUnreadableLights(Report& rep, const UsdStageRefPtr& flat) {
@@ -141,7 +142,7 @@ void ReplaceUnreadableLights(Report& rep, const UsdStageRefPtr& flat) {
     size_t kept = 0;
     for (UsdPrim prim : lights) {
         const std::string type = prim.GetTypeName().GetString();
-        if (type == "SphereLight" || type == "DiskLight" || type == "DomeLight") {
+        if (type == "DistantLight" || type == "SphereLight" || type == "DiskLight" || type == "DomeLight") {
             ++kept;
             continue;
         }

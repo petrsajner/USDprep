@@ -9,7 +9,7 @@
 # - Proxy is proxy geometry with animated visibility (Nuke draws every purpose)
 # - Both has a MaterialX output next to its standard surface (Nuke renders black)
 # - RendererOnly has nothing Nuke can render (Nuke does not draw the mesh)
-# - a sphere light Nuke reads, a distant and a rect light it does not
+# - a sphere and a distant light Nuke reads, a rect light it does not
 def Xform "Root"
 {
     def Mesh "Render" (
