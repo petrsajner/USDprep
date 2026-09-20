@@ -95,7 +95,7 @@ def on_page(canvas, doc):
     canvas.line(20 * mm, 15 * mm, A4[0] - 20 * mm, 15 * mm)
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(MUTED)
-    canvas.drawString(20 * mm, 10.5 * mm, "USDprep %s - User Manual" % VERSION)
+    canvas.drawString(20 * mm, 10.5 * mm, "USDprep %s - User Manual - (c) 2026 Petr Sajner" % VERSION)
     canvas.drawRightString(A4[0] - 20 * mm, 10.5 * mm, str(doc.page))
     canvas.restoreState()
 
@@ -113,7 +113,7 @@ def on_cover(canvas, doc):
     canvas.drawString(20 * mm, A4[1] - 64 * mm, "USD scenes made ready for Nuke")
     canvas.setFont("Helvetica", 10)
     canvas.setFillColor(colors.HexColor("#B9C2CB"))
-    canvas.drawString(20 * mm, A4[1] - 78 * mm, "User Manual  -  version %s" % VERSION)
+    canvas.drawString(20 * mm, A4[1] - 78 * mm, "User Manual  -  version %s  -  by Petr Sajner" % VERSION)
     canvas.restoreState()
 
 
@@ -159,6 +159,16 @@ story += picture("app_start.png", WIDTH, "USDprep after opening a scene: the 3D 
                                          "<i>Prep for Nuke</i> panel on the right. Nothing is selected yet.")
 story += [p("That is the whole workflow. The rest of this manual explains the choices you can make on the way, "
             "what USDprep changes in the file and why, and what to do with an older Nuke."),
+          p("USDprep and usdtweak", H2),
+          p("USDprep is built on top of <b>usdtweak</b>, a complete open-source USD editor by Cyril Pichard. "
+            "To keep things simple for compositing work, USDprep starts with most of that editor out of sight: "
+            "you see the 3D view and the <i>Prep for Nuke</i> panel, and nothing else. Nothing was removed, "
+            "though. Every usdtweak function is still there and works - the scene outliner, the property and "
+            "layer editors, the timeline, the text editor, saving and editing USD layers. Open any of them from "
+            "the <b>Windows</b> menu, and close them again the same way; USDprep remembers your layout. "
+            "If you closed the <i>Prep for Nuke</i> panel itself, the <b>Tools</b> menu brings it back."),
+          p("The version you are running is shown in the window title, at the right end of the panel's second "
+            "row, and in <b>Help &gt; About</b>.", SMALL),
           PageBreak()]
 
 # ------------------------------------------------------- finding your way
@@ -405,13 +415,14 @@ story += bullets([
     "About 100 MB of disk space.",
 ])
 story += [p("Licence", H2),
-          p("USDprep is free software under the Apache License 2.0 - free to use, change and redistribute, also "
+          p("USDprep was written by <b>Petr Sajner</b> (Copyright 2026 Petr Sajner) and is free software under "
+            "the Apache License 2.0 - free to use, change and redistribute, also "
             "commercially. It is built on usdtweak by Cyril Pichard (Apache 2.0), Pixar's OpenUSD, Alembic, Imath "
             "and meshoptimizer. Their licences are in the <font face='Courier'>licenses</font> folder of the "
             "installation, listed in <font face='Courier'>THIRD_PARTY_NOTICES.txt</font>.")]
 
 doc = BaseDocTemplate(OUT, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm,
-                      bottomMargin=20 * mm, title="USDprep User Manual", author="USDprep",
+                      bottomMargin=20 * mm, title="USDprep User Manual", author="Petr Sajner",
                       subject="USD scenes made ready for Nuke")
 frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="body", leftPadding=0, rightPadding=0,
               topPadding=0, bottomPadding=0)

@@ -42,7 +42,8 @@ std::string UsdVersionString() {
 void PrintUsage() {
     std::cout
         << "usdcut " << USDPREP_VERSION_STRING
-        << " — prepare USD scenes for compositing (USD " << UsdVersionString() << ")\n\n"
+        << " — prepare USD scenes for compositing (USD " << UsdVersionString() << ")\n"
+        << "by Petr Sajner, Apache License 2.0\n\n"
         << "usage:\n"
         << "  usdcut extract <scene> <prim-path>... -o <out.usdc|usda|obj|abc> [options]\n"
         << "  usdcut prune   <scene> (--except <paths> | --drop <paths> |\n"

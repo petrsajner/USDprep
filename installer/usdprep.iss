@@ -10,7 +10,12 @@
 AppId={{6E1B0C0A-5B7D-4F0E-9B1E-0D5C7A2F4B11}
 AppName=USDprep
 AppVersion={#AppVersion}
-AppPublisher=USDprep
+AppPublisher=Petr Sajner
+AppCopyright=Copyright (C) 2026 Petr Sajner
+VersionInfoVersion={#AppVersion}
+VersionInfoCompany=Petr Sajner
+VersionInfoProductName=USDprep
+VersionInfoDescription=USDprep setup
 LicenseFile={#BundleDir}\LICENSE.txt
 DefaultDirName={localappdata}\Programs\USDprep
 DefaultGroupName=USDprep

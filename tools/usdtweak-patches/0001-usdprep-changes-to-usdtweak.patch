@@ -1,11 +1,37 @@
+diff --git a/src/Editor.cpp b/src/Editor.cpp
+index f35443a..88ba3ea 100644
+--- a/src/Editor.cpp
++++ b/src/Editor.cpp
+@@ -221,6 +221,14 @@ struct AboutModalDialog : public ModalDialog {
+         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
+         const float imageBottomY = DrawAboutHeader();
+ 
++        for (const std::string &line : usdtweak::GetAboutLines()) {
++            if (line.empty()) {
++                ImGui::NewLine();
++            } else {
++                textShadowed(line.c_str());
++            }
++        }
++
+         char buf[256];
+         snprintf(buf, sizeof(buf), "usdtweak pre-alpha version %s", GetBuildDate());
+         textShadowed(buf);
 diff --git a/src/addons/Api.cpp b/src/addons/Api.cpp
-index 98dfc68..65c26b9 100644
+index 98dfc68..b39ea7a 100644
 --- a/src/addons/Api.cpp
 +++ b/src/addons/Api.cpp
-@@ -73,6 +73,14 @@ void FrameCameraOnSelection() {
+@@ -73,6 +73,21 @@ void FrameCameraOnSelection() {
      if (gEditor) gEditor->GetViewport().FrameCameraOnSelection(gEditor->GetSelection());
  }
  
++static std::vector<std::string> &_AboutLines() {
++    static std::vector<std::string> lines;
++    return lines;
++}
++void AddAboutLine(const std::string &line) { _AboutLines().push_back(line); }
++const std::vector<std::string> &GetAboutLines() { return _AboutLines(); }
++
 +void FrameCameraOnScene() {
 +    if (gEditor) gEditor->GetViewport().FrameCameraOnRootPrim();
 +}
@@ -18,7 +44,7 @@ index 98dfc68..65c26b9 100644
  std::vector<SdfPath> SearchPrimsByName(const std::string &needle, uint32_t limit) {
      const uint32_t mask = static_cast<uint32_t>(SearchCategory::PrimName) |
 diff --git a/src/addons/Api.h b/src/addons/Api.h
-index f3ed2fc..cdb7c14 100644
+index f3ed2fc..6d8aa5a 100644
 --- a/src/addons/Api.h
 +++ b/src/addons/Api.h
 @@ -21,6 +21,7 @@
@@ -29,10 +55,15 @@ index f3ed2fc..cdb7c14 100644
  #include <pxr/base/tf/registryManager.h>
  #include <pxr/usd/sdf/layer.h>
  #include <pxr/usd/sdf/path.h>
-@@ -72,6 +73,11 @@ void FindOrOpenLayer(const std::string &path);
+@@ -72,6 +73,16 @@ void FindOrOpenLayer(const std::string &path);
  void CreateStage(const std::string &path);
  
  void FrameCameraOnSelection();
++// Lines an addon wants at the top of Help > About (a product built on usdtweak names itself
++// there, above usdtweak's own credits). Empty line = a gap.
++void AddAboutLine(const std::string &line);
++const std::vector<std::string> &GetAboutLines();
++
 +// Frame the whole scene (the default prim, else everything): the way back from anywhere.
 +void FrameCameraOnScene();
 +// Frame a world-space box; what stands between the camera and the box is cut away.
@@ -153,4 +184,30 @@ index afba7e4..3f93bd0 100644
 +
      /// Returns the current camera updated to match the viewport ratio
      GfCamera GetViewportCamera(double width, double height) const;
+ 
+diff --git a/src/widgets/ModalDialogs.cpp b/src/widgets/ModalDialogs.cpp
+index c866725..b9ee861 100644
+--- a/src/widgets/ModalDialogs.cpp
++++ b/src/widgets/ModalDialogs.cpp
+@@ -67,6 +67,21 @@ static void BeginPopupModalRecursive(const std::vector<ModalDialog *> &modals, i
+ // like closing or draw ... it should really be called ProcessModalDialogs
+ void DrawCurrentModal() {
+     CheckCloseModal();
++    // ImGui closes a popup when another window takes the focus (SetWindowFocus from a panel
++    // or an addon, for instance). The dialog would then stay on this stack without ever
++    // being drawn again, and every dialog opened later would wait behind it for ever - no
++    // file browser, no About, no Preferences. A bottom dialog whose popup is gone, and that
++    // was not triggered this very frame, is dropped with everything stacked on it.
++    if (!modalDialogStack.empty() && !(modalOpenTriggered && modalDialogStack.size() == 1) &&
++        !ImGui::IsPopupOpen(modalDialogStack.front()->DialogId())) {
++        const bool reopenTop = modalOpenTriggered;
++        ModalDialog *top = reopenTop ? modalDialogStack.back() : nullptr;
++        for (ModalDialog *modal : modalDialogStack) {
++            if (modal != top) delete modal;
++        }
++        modalDialogStack.clear();
++        if (top) modalDialogStack.push_back(top); // the one just asked for still gets its turn
++    }
+     BeginPopupModalRecursive(modalDialogStack, 0);
+ }
  

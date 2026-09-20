@@ -112,6 +112,43 @@ everything else builds and an `.abc` output fails with a clear message).
 The bundle grew by `Imath.dll` - 98 binaries, 80 MB, installer 20 MB;
 `.abc` export was run from the bundle in a clean environment.
 
+## Slice 6: usdtweak's dialogs were dead - found and fixed; the author; the version in sight
+
+**No usdtweak dialog opened** (File > Open / Save as, Preferences, Help >
+About) - reported by Petr. Bisected with a temporary switch that opened a
+test modal by itself and logged ImGui's popup stack: the dialogs died even
+with our panel drawing nothing, as soon as *any* window had been focused
+with `SetWindowFocus` early on. The log showed why: usdtweak's modal stack
+already held one dialog before ours was pushed. usdtweak's **splash screen
+is a modal popup** that lives for two seconds; our panel called
+`SetWindowFocus` on frame 3 to bring its tab to the front, ImGui closes
+popups when another window takes the focus, and the splash's dialog object
+stayed on usdtweak's stack for ever - every later dialog queued up behind a
+popup that would never be drawn again. (It is also why nobody had ever seen
+the splash in USDprep.)
+
+Fixed twice: the panel waits with its focus until no popup is open
+(`UsdPrep.cpp`), and usdtweak's `DrawCurrentModal` drops a bottom dialog
+whose popup ImGui has closed behind its back (in the usdtweak patch, now
+`tools/usdtweak-patches/0001-usdprep-changes-to-usdtweak.patch`). Checked in
+the running application: the splash shows, Help > About and File > Open
+open with our tab in front.
+
+"Playback runs as soon as the program starts" - the Debug window's
+"16.6 ms/frame (60 FPS)" is the interface redrawing itself, which an
+immediate-mode GUI does all the time; timeline playback (`_isPlaying`) is
+only started by Space in the 3D view or the timeline's play button.
+
+**Author and version.** Petr Sajner is named where usdtweak's author is:
+manual (cover, footer, licence chapter, PDF metadata), installer
+(publisher, copyright, version info), `usdcut help`, README, NOTICE, the
+version tooltip in the panel, and the top of Help > About (a small hook in
+the usdtweak patch: `usdtweak::AddAboutLine`). The version is in the window
+title ("USDprep 0.9.0"), at the right end of the panel's second row, in
+Help > About and on every page of the manual. The manual has a section
+"USDprep and usdtweak": built on it, most of the editor starts hidden,
+nothing was removed - Windows menu for its panels, Tools menu for ours.
+
 ## Slice 5: v0.9.0 - manual, plan, and a third round of measurements
 
 - Version 0.9.0. `STUDY_AND_PLAN.md` opens with a table of where the plan

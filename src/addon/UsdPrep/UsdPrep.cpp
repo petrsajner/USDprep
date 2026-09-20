@@ -22,6 +22,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <usdprep/Version.h>
+
 #include "ExportPanel.h"
 #include "OutputPath.h"
 #include "SceneOverview.h"
@@ -71,11 +73,23 @@ int ObjectCount(const UsdStageRefPtr& stage) {
 // panel takes the right side. From then on the layout is the user's.
 void ApplySimpleLayoutOnce() {
     static int frame = 0;
+    static bool focused = false;
     ++frame;
+    // Our tab comes to the front once - but only when no dialog is open.
+    // usdtweak's splash screen is a modal popup; taking the focus while it
+    // is up closes the popup behind usdtweak's back, and its dialog then
+    // blocks every later one (no file browser, no About, no Preferences).
+    if (frame >= 3 && !focused &&
+        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+        ImGui::SetWindowFocus(kPanelTitle);
+        focused = true;
+    }
     if (frame == 2) {
         // The program is USDprep; usdtweak, which it is built on, keeps its
         // credit in the About box.
-        if (GLFWwindow* window = glfwGetCurrentContext()) glfwSetWindowTitle(window, "USDprep");
+        if (GLFWwindow* window = glfwGetCurrentContext()) {
+            glfwSetWindowTitle(window, "USDprep " USDPREP_VERSION_STRING);
+        }
         // second frame: our window exists, docking can be applied to it.
         // The version lets a later release re-apply a changed simple mode
         // once, without touching a layout the user has since arranged.
@@ -101,8 +115,6 @@ void ApplySimpleLayoutOnce() {
         }
         usdtweak::SetAddonString(kAddonId, "layoutVersion", kLayoutVersion);
         usdtweak::PersistSettings();
-    } else if (frame == 3) {
-        ImGui::SetWindowFocus(kPanelTitle);
     }
 }
 
@@ -185,6 +197,21 @@ void DrawPrepPanel() {
                           "  A                        the whole scene - the way back from anywhere");
     }
 
+    {
+        // version, always in sight: far right of this row
+        const char* version = "USDprep " USDPREP_VERSION_STRING;
+        const float right = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+        ImGui::SameLine(right - ImGui::CalcTextSize(version).x - ImGui::GetStyle().FramePadding.x);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", version);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("USDprep " USDPREP_VERSION_STRING " - USD scenes made ready for Nuke\n"
+                              "by Petr Sajner, Apache License 2.0\n\n"
+                              "Built on usdtweak by Cyril Pichard: the whole USD editor is still here -\n"
+                              "its panels are in the Windows menu, its credits in Help > About.");
+        }
+    }
+
     // ----- tree, then export ---------------------------------------------
     Tree().Draw(stage, Exporter().LastHeight());
     Exporter().Draw(stage, roots);
@@ -200,6 +227,11 @@ TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, UsdPrep) {
     addon.defaultOpen = true;
     addon.draw = &DrawPrepPanel;
     UsdTweakAddonRegistry::GetInstance().Add(std::move(addon));
+
+    // Help > About: the product first, then what it is built on.
+    usdtweak::AddAboutLine("USDprep " USDPREP_VERSION_STRING " - USD scenes made ready for Nuke");
+    usdtweak::AddAboutLine("   Copyright (c) 2026 Petr Sajner - Apache License 2.0 - built on usdtweak:");
+    usdtweak::AddAboutLine("");
 }
 
 }  // namespace

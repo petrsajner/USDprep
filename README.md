@@ -1,5 +1,8 @@
 # USDprep — prepare USD scenes for Nuke
 
+By **Petr Sajner**. Apache License 2.0. Built on
+[usdtweak](https://github.com/cpichard/usdtweak) by Cyril Pichard.
+
 Small, focused utility that turns heavy production USD scenes from CG into
 light, Nuke-friendly assets: extract one object, prune the rest, flatten,
 package. GUI (usdtweak addon) planned on top of the same core; the CLI is
