@@ -20,6 +20,8 @@
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
 
+#include <GLFW/glfw3.h>
+
 #include "ExportPanel.h"
 #include "OutputPath.h"
 #include "SceneTree.h"
@@ -70,6 +72,9 @@ void ApplySimpleLayoutOnce() {
     static int frame = 0;
     ++frame;
     if (frame == 2) {
+        // The program is USDprep; usdtweak, which it is built on, keeps its
+        // credit in the About box.
+        if (GLFWwindow* window = glfwGetCurrentContext()) glfwSetWindowTitle(window, "USDprep");
         // second frame: our window exists, docking can be applied to it.
         // The version lets a later release re-apply a changed simple mode
         // once, without touching a layout the user has since arranged.
@@ -153,6 +158,27 @@ void DrawPrepPanel() {
         ImGui::SetTooltip("Up/Down: parent / child of the selected object\n"
                           "F: frame the 3D view on it\n"
                           "Ctrl+click: add or remove without touching the rest");
+    }
+
+    // ----- finding your way in the 3D view -------------------------------
+    if (roots.empty()) ImGui::BeginDisabled();
+    if (ImGui::Button("Frame selection (F)")) usdtweak::FrameCameraOnSelection();
+    if (roots.empty()) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Whole scene (A)")) usdtweak::FrameCameraOnScene();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lost? This brings the whole scene back into view.");
+    ImGui::SameLine();
+    ImGui::TextDisabled("How to move (?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("In the 3D view:\n"
+                          "  Mouse wheel              closer / further\n"
+                          "  Alt + left drag          turn around the object\n"
+                          "  Alt + middle drag        slide sideways, up and down\n"
+                          "  Alt + right drag         closer / further, smoothly\n"
+                          "  Hold right button + W A S D (Q E = down / up)\n"
+                          "                           walk through the scene; Shift = faster\n"
+                          "  F                        frame the selected object\n"
+                          "  A                        the whole scene - the way back from anywhere");
     }
 
     // ----- tree, then export ---------------------------------------------

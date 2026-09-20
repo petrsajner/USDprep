@@ -8,23 +8,24 @@
 
 [Setup]
 AppId={{6E1B0C0A-5B7D-4F0E-9B1E-0D5C7A2F4B11}
-AppName=USD Prep for Nuke
+AppName=USDprep
 AppVersion={#AppVersion}
-AppPublisher=usdprep
-DefaultDirName={localappdata}\Programs\usdprep
-DefaultGroupName=USD Prep for Nuke
+AppPublisher=USDprep
+LicenseFile={#BundleDir}\LICENSE.txt
+DefaultDirName={localappdata}\Programs\USDprep
+DefaultGroupName=USDprep
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutDir}
-OutputBaseFilename=usdprep-{#AppVersion}-setup
+OutputBaseFilename=USDprep-{#AppVersion}-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 InfoBeforeFile=requirements.txt
 ChangesEnvironment=yes
-UninstallDisplayIcon={app}\bin\usdtweak.exe
+UninstallDisplayIcon={app}\bin\USDprep.exe
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
@@ -34,9 +35,9 @@ Name: "addtopath"; Description: "Add the usdcut command line tool to my PATH"; F
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
-Name: "{group}\USD Prep for Nuke"; Filename: "{app}\bin\usdtweak.exe"; WorkingDir: "{userdocs}"
-Name: "{group}\Uninstall USD Prep for Nuke"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\USD Prep for Nuke"; Filename: "{app}\bin\usdtweak.exe"; WorkingDir: "{userdocs}"; Tasks: desktopicon
+Name: "{group}\USDprep"; Filename: "{app}\bin\USDprep.exe"; WorkingDir: "{userdocs}"
+Name: "{group}\Uninstall USDprep"; Filename: "{uninstallexe}"
+Name: "{userdesktop}\USDprep"; Filename: "{app}\bin\USDprep.exe"; WorkingDir: "{userdocs}"; Tasks: desktopicon
 
 [Registry]
 ; usdcut on the user's PATH (HKCU: no admin needed); removed again on uninstall
@@ -44,7 +45,7 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
     Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}\bin'))
 
 [Run]
-Filename: "{app}\bin\usdtweak.exe"; Description: "Start USD Prep for Nuke"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\bin\USDprep.exe"; Description: "Start USDprep"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function NeedsAddPath(Dir: string): Boolean;

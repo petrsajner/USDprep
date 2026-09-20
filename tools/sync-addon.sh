@@ -10,3 +10,15 @@ mkdir -p "$DST"
 rm -f "$DST"/*.cpp "$DST"/*.h
 cp "$SRC"/*.cpp "$SRC"/*.h "$SRC/CMakeLists.txt" "$DST/"
 echo "Synced UsdPrep addon -> $DST"
+
+# The few changes usdprep needs in usdtweak itself (tools/usdtweak-patches),
+# applied once: a patch that is already in is skipped.
+for PATCH in "$ROOT"/tools/usdtweak-patches/*.patch; do
+    [ -e "$PATCH" ] || continue
+    if git -C "$ROOT/third_party/usdtweak" apply --reverse --check "$PATCH" 2>/dev/null; then
+        echo "Already applied: $(basename "$PATCH")"
+    else
+        git -C "$ROOT/third_party/usdtweak" apply "$PATCH"
+        echo "Applied: $(basename "$PATCH")"
+    fi
+done

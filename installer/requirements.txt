@@ -1,4 +1,4 @@
-USD Prep for Nuke
+USDprep - USD scenes made ready for Nuke
 
 Turns heavy production USD scenes into light assets that Nuke reads:
 pick an object in the 3D view or the scene tree, press Export.

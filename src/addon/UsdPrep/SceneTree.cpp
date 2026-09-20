@@ -243,6 +243,10 @@ void SceneTree::HandleGlobalKeys(const UsdStageRefPtr& stage) {
     if (_stage != stage) ObserveSelection(stage);
     // A text field owns the keyboard while the artist types in it.
     if (ImGui::GetIO().WantTextInput) return;
+    // While the right button is held the 3D view is in walk mode: the arrows
+    // and A are steps there, not ours.
+    const bool walking = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+    if (walking) return;
     if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, false)) {
         SelectParent();
     } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, false)) {
@@ -250,6 +254,8 @@ void SceneTree::HandleGlobalKeys(const UsdStageRefPtr& stage) {
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
         usdtweak::FrameCameraOnSelection();
+    } else if (!ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) {
+        usdtweak::FrameCameraOnScene();  // the way back from anywhere
     }
 }
 

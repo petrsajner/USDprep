@@ -1,4 +1,4 @@
-# usdprep — prepare USD scenes for Nuke
+# USDprep — prepare USD scenes for Nuke
 
 Small, focused utility that turns heavy production USD scenes from CG into
 light, Nuke-friendly assets: extract one object, prune the rest, flatten,

@@ -6,10 +6,10 @@
 #   python tools/make-bundle.py [--out dist]
 #
 # Layout (USD looks for its plugins relative to its own DLLs):
-#   usdprep-<version>/bin/          usdtweak.exe, usdcut.exe, *.dll
-#   usdprep-<version>/bin/usd/      USD core plugin resources
-#   usdprep-<version>/plugin/usd/   hdStorm, hio*, sdr* plugins
-#   usdprep-<version>/licenses/     the licences of what is bundled
+#   USDprep-<version>/bin/          USDprep.exe (usdtweak + the Prep panel), usdcut.exe, *.dll
+#   USDprep-<version>/bin/usd/      USD core plugin resources
+#   USDprep-<version>/plugin/usd/   hdStorm, hio*, sdr* plugins
+#   USDprep-<version>/licenses/     the licences of what is bundled
 import argparse, glob, json, os, re, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,7 +58,7 @@ def main():
         if not os.path.exists(needed):
             sys.exit("not built yet: " + needed)
 
-    bundle = os.path.join(args.out, "usdprep-" + version())
+    bundle = os.path.join(args.out, "USDprep-" + version())
     shutil.rmtree(bundle, ignore_errors=True)
     bin_dir = os.path.join(bundle, "bin")
     os.makedirs(bin_dir)
@@ -90,6 +90,10 @@ def main():
     for key, path in seen.items():
         if key not in plugin_dlls:
             shutil.copy2(path, bin_dir)
+    # the program is USDprep; usdtweak is what it is built on (About box, licences)
+    os.replace(os.path.join(bin_dir, "usdtweak.exe"), os.path.join(bin_dir, "USDprep.exe"))
+    shutil.copy2(os.path.join(ROOT, "LICENSE"), os.path.join(bundle, "LICENSE.txt"))
+    shutil.copy2(os.path.join(ROOT, "NOTICE"), os.path.join(bundle, "NOTICE.txt"))
     shutil.copytree(os.path.join(ENV, "Library", "bin", "usd"), os.path.join(bin_dir, "usd"))
     shutil.copytree(plugin_src, os.path.join(bundle, "plugin", "usd"),
                     ignore=shutil.ignore_patterns("*.lib", "*.pdb"))
@@ -136,7 +140,7 @@ def main():
             sys.exit("Inno Setup 6 (ISCC.exe) not found")
         subprocess.run([iscc[0], "/Q", "/DAppVersion=" + version(), "/DBundleDir=" + bundle, "/DOutDir=" + args.out,
                         os.path.join(ROOT, "installer", "usdprep.iss")], check=True)
-        setup = os.path.join(args.out, "usdprep-%s-setup.exe" % version())
+        setup = os.path.join(args.out, "USDprep-%s-setup.exe" % version())
         print("setup  : %s (%.0f MB)" % (setup, os.path.getsize(setup) / 1e6))
 
 

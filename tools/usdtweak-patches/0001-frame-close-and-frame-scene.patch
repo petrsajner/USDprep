@@ -1,0 +1,123 @@
+diff --git a/src/addons/Api.cpp b/src/addons/Api.cpp
+index 98dfc68..b521728 100644
+--- a/src/addons/Api.cpp
++++ b/src/addons/Api.cpp
+@@ -73,6 +73,10 @@ void FrameCameraOnSelection() {
+     if (gEditor) gEditor->GetViewport().FrameCameraOnSelection(gEditor->GetSelection());
+ }
+ 
++void FrameCameraOnScene() {
++    if (gEditor) gEditor->GetViewport().FrameCameraOnRootPrim();
++}
++
+ // ----------------------------------------------------------- search service
+ std::vector<SdfPath> SearchPrimsByName(const std::string &needle, uint32_t limit) {
+     const uint32_t mask = static_cast<uint32_t>(SearchCategory::PrimName) |
+diff --git a/src/addons/Api.h b/src/addons/Api.h
+index f3ed2fc..7e893ae 100644
+--- a/src/addons/Api.h
++++ b/src/addons/Api.h
+@@ -72,6 +72,8 @@ void FindOrOpenLayer(const std::string &path);
+ void CreateStage(const std::string &path);
+ 
+ void FrameCameraOnSelection();
++// Frame the whole scene (the default prim, else everything): the way back from anywhere.
++void FrameCameraOnScene();
+ 
+ // ----------------------------------------------------------- search service
+ /// Substring search over indexed prim paths. Returns at most `limit` matches.
+diff --git a/src/viewport/CameraRig.cpp b/src/viewport/CameraRig.cpp
+index ad6fb5c..feb375d 100644
+--- a/src/viewport/CameraRig.cpp
++++ b/src/viewport/CameraRig.cpp
+@@ -123,9 +123,13 @@ void CameraRig::FrameBoundingBox(GfCamera &camera, const GfBBox3d &bbox) {
+         auto bboxRange = bbox.ComputeAlignedRange();
+         auto rect = bboxRange.GetMax() - bboxRange.GetMin();
+         _selectionSize = std::max(rect[0], rect[1]) * 2; // This reset the selection size
+-        auto fov = camera.GetFieldOfView(GfCamera::FOVHorizontal);
+-        auto lengthToFit = _selectionSize * 0.5;
+-        dist = lengthToFit / atan(fov * 0.5 * (PI_F / 180.f));
++        // Fit the bounding sphere into the narrower field of view: as close as the object
++        // allows. Backing away further than that leaves the room the object stands in, and
++        // the wall between ends up in front of the camera.
++        const double radius = 0.5 * rect.GetLength();
++        const double fov = std::min(camera.GetFieldOfView(GfCamera::FOVHorizontal),
++                                    camera.GetFieldOfView(GfCamera::FOVVertical));
++        dist = static_cast<float>(radius / sin(fov * 0.5 * (PI_F / 180.f)));
+ 
+         SetCameraTransform(camera, mat_center.ExtractTranslation(), rotation, dist);
+     } else { // Assuming Ortho case
+diff --git a/src/viewport/FlyCameraManipulator.cpp b/src/viewport/FlyCameraManipulator.cpp
+index 6794de8..355dc35 100644
+--- a/src/viewport/FlyCameraManipulator.cpp
++++ b/src/viewport/FlyCameraManipulator.cpp
+@@ -10,6 +10,8 @@
+ FlyCameraManipulator::FlyCameraManipulator(const GfVec2i &viewportSize, bool isZUp) : CameraRig(viewportSize, isZUp) {}
+ 
+ void FlyCameraManipulator::OnBeginEdition(Viewport &viewport) {
++    // walking through the scene: walls are walls again
++    viewport.ClearFramedSelection();
+     if (viewport.IsEditingStageCamera()) {
+         _stageCamera = UsdGeomCamera::Get(viewport.GetCurrentStage(), viewport.GetSelectedStageCameraPath());
+         BeginEdition(viewport.GetCurrentStage());
+diff --git a/src/viewport/Viewport.cpp b/src/viewport/Viewport.cpp
+index 421882c..dfbe32b 100644
+--- a/src/viewport/Viewport.cpp
++++ b/src/viewport/Viewport.cpp
+@@ -333,11 +333,17 @@ void Viewport::FrameCameraOnSelection(const Selection &selection) { // Camera ma
+         }
+         auto defaultPrim = GetCurrentStage()->GetDefaultPrim();
+         FrameCameraManipulatorsOnBBox(GetEditableCamera(), bbox);
++        const GfRange3d range = bbox.ComputeAlignedRange();
++        if (!range.IsEmpty()) {
++            _framedCenter = range.GetMidpoint();
++            _framedRadius = 0.5 * range.GetSize().GetLength();
++        }
+     }
+ }
+ 
+ /// Frame the viewport using the bounding box of the root prim
+ void Viewport::FrameCameraOnRootPrim() {
++    ClearFramedSelection();
+     if (GetCurrentStage()) {
+         UsdGeomBBoxCache bboxcache(_imagingSettings.frame, UsdGeomImageable::GetOrderedPurposeTokens());
+         auto defaultPrim = GetCurrentStage()->GetDefaultPrim();
+@@ -521,6 +527,15 @@ GfCamera Viewport::GetViewportCamera(double width, double height) const {
+     if (viewportCamera.GetProjection() == GfCamera::Perspective) {
+         viewportCamera.SetPerspectiveFromAspectRatioAndFieldOfView(
+             width / height, viewportCamera.GetFieldOfView(GfCamera::FOVHorizontal), GfCamera::FOVHorizontal);
++        if (_framedRadius > 0.0) {
++            // cut away what stands in front of the framed selection
++            const GfVec3d position = viewportCamera.GetTransform().ExtractTranslation();
++            const float cut = static_cast<float>((position - _framedCenter).GetLength() - _framedRadius);
++            const GfRange1f clipping = viewportCamera.GetClippingRange();
++            if (cut > clipping.GetMin() && cut < clipping.GetMax()) {
++                viewportCamera.SetClippingRange(GfRange1f(cut, clipping.GetMax()));
++            }
++        }
+     } else { // assuming ortho
+         viewportCamera.SetOrthographicFromAspectRatioAndSize(
+             width / height, viewportCamera.GetHorizontalAperture() * GfCamera::APERTURE_UNIT, GfCamera::FOVHorizontal);
+diff --git a/src/viewport/Viewport.h b/src/viewport/Viewport.h
+index afba7e4..557adc0 100644
+--- a/src/viewport/Viewport.h
++++ b/src/viewport/Viewport.h
+@@ -137,9 +137,18 @@ class Viewport final {
+     void HandleManipulationEvents();
+     void HandleKeyboardShortcut();
+ 
++    /// Forget the framed selection: nothing in front of it is cut away any more.
++    void ClearFramedSelection() { _framedRadius = 0.0; }
++
+   private:
+     void FrameCameraManipulatorsOnBBox(GfCamera &cam, const GfBBox3d &bbox);
+ 
++    /// The bounding sphere of the selection the camera was last framed on. While it is set,
++    /// the near clipping plane rides just in front of it, so whatever stands between the
++    /// camera and the object - the wall of the room it is in - is cut away instead of hiding it.
++    GfVec3d _framedCenter = GfVec3d(0.0);
++    double _framedRadius = 0.0;
++
+     /// Returns the current camera updated to match the viewport ratio
+     GfCamera GetViewportCamera(double width, double height) const;
+ 
