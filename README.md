@@ -83,6 +83,11 @@ too — `--keep-render-contexts` / `--keep-unused-materials` opt out. The
 draw-mode card setup (six preview textures per asset that Nuke never
 draws) goes as well; `--keep-cards` keeps it.
 
+**Texture size.** `--max-texture 4096` (the Nuke preset) scales any texture
+larger than that on its longer side down — in the output only, the
+originals stay as they are; PNG, JPEG and EXR, UDIM sets tile by tile.
+`0` leaves every texture alone.
+
 **Animation.** `--animation range` (the Nuke preset) drops time samples
 outside the scene's start/end — a simulation's pre-roll, typically —
 keeping one bracketing sample on each side; `--frames 1010-1020` picks the

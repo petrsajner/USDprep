@@ -32,6 +32,9 @@ struct ExtractOptions {
     bool stripUnusedMaterials = true;
     // Draw-mode cards (a viewer's stand-in box with six textures) go too.
     bool stripDrawModeCards = true;
+    // Textures larger than this on their longer side are scaled down in
+    // the output (0 = leave them alone). The originals are never touched.
+    int maxTextureSize = 0;
     // Animation: "all" leaves it, "range" drops time samples outside
     // [frameStart, frameEnd] (the stage's own range when kStageFrame),
     // "static" bakes staticFrame (the range start when kStageFrame) as

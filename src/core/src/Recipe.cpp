@@ -30,6 +30,7 @@ const Recipe& NukePreset() {
         r.stripRenderContexts = true;
         r.stripUnusedMaterials = true;
         r.stripDrawModeCards = true;
+        r.maxTextureSize = 4096;
         r.animation = "range";
         return r;
     }();
@@ -50,6 +51,7 @@ const Recipe& RawPreset() {
         r.stripRenderContexts = false;
         r.stripUnusedMaterials = false;
         r.stripDrawModeCards = false;
+        r.maxTextureSize = 0;
         r.animation = "all";
         return r;
     }();
@@ -199,6 +201,12 @@ bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
             ok = ReadBool(value, &loaded.stripUnusedMaterials, key, error);
         } else if (key == "stripDrawModeCards") {
             ok = ReadBool(value, &loaded.stripDrawModeCards, key, error);
+        } else if (key == "maxTextureSize") {
+            if (!value.IsInt() || value.GetInt() < 0) {
+                *error = "'maxTextureSize' must be a whole number of pixels (0 = no cap)";
+                return false;
+            }
+            loaded.maxTextureSize = value.GetInt();
         } else if (key == "animation") {
             const std::string choice = value.IsString() ? value.GetString() : "";
             if (choice != "all" && choice != "range" && choice != "static") {
@@ -239,6 +247,7 @@ std::string RecipeToJson(const Recipe& recipe) {
     os << "  \"stripRenderContexts\": " << (recipe.stripRenderContexts ? "true" : "false") << ",\n";
     os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << ",\n";
     os << "  \"stripDrawModeCards\": " << (recipe.stripDrawModeCards ? "true" : "false") << ",\n";
+    os << "  \"maxTextureSize\": " << recipe.maxTextureSize << ",\n";
     os << "  \"animation\": \"" << JsonEscape(recipe.animation) << "\"";
     // frames only when set: JSON has no way to say "the stage's own"
     if (!std::isnan(recipe.frameStart)) os << ",\n  \"frameStart\": " << recipe.frameStart;
@@ -258,6 +267,7 @@ void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
     options->stripDrawModeCards = recipe.stripDrawModeCards;
+    options->maxTextureSize = recipe.maxTextureSize;
     options->animation = recipe.animation;
     options->frameStart = recipe.frameStart;
     options->frameEnd = recipe.frameEnd;
@@ -274,6 +284,7 @@ void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
     options->stripDrawModeCards = recipe.stripDrawModeCards;
+    options->maxTextureSize = recipe.maxTextureSize;
     options->animation = recipe.animation;
     options->frameStart = recipe.frameStart;
     options->frameEnd = recipe.frameEnd;

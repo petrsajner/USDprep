@@ -69,6 +69,8 @@ void PrintUsage() {
         << "  --keep-unused-materials keep materials nothing binds\n"
         << "  --keep-cards           keep the draw-mode card setup (six preview textures\n"
         << "                         per asset that Nuke never draws)\n"
+        << "  --max-texture <px>     scale textures down to this many pixels on the\n"
+        << "                         longer side, in the output only (0 = no cap)\n"
         << "  --animation <mode>     all | range | static: keep every time sample, only\n"
         << "                         the shot range, or bake one frame (default: recipe's)\n"
         << "  --frames <a>-<b>       the range for --animation range (default: the\n"
@@ -126,6 +128,7 @@ struct CommonOptions {
     bool keepRenderContexts = false;
     bool keepUnusedMaterials = false;
     bool keepCards = false;
+    int maxTextureSize = -1;  // -1 = the recipe decides
     std::string animation;  // empty = the recipe decides
     double frameStart = usdprep::kStageFrame;
     double frameEnd = usdprep::kStageFrame;
@@ -167,6 +170,7 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (common.keepRenderContexts) options->stripRenderContexts = false;
     if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
     if (common.keepCards) options->stripDrawModeCards = false;
+    if (common.maxTextureSize >= 0) options->maxTextureSize = common.maxTextureSize;
     if (!common.animation.empty()) options->animation = common.animation;
     if (!std::isnan(common.frameStart)) options->frameStart = common.frameStart;
     if (!std::isnan(common.frameEnd)) options->frameEnd = common.frameEnd;
@@ -216,6 +220,10 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             common.keepUnusedMaterials = true;
         } else if (a == "--keep-cards") {
             common.keepCards = true;
+        } else if (a == "--max-texture") {
+            if (++i >= args.size()) { error = "--max-texture needs a pixel count"; return -1; }
+            common.maxTextureSize = static_cast<int>(std::strtol(args[i].c_str(), nullptr, 10));
+            if (common.maxTextureSize < 0) { error = "--max-texture needs a pixel count (0 = no cap)"; return -1; }
         } else if (a == "--animation") {
             if (++i >= args.size()) { error = "--animation needs all, range or static"; return -1; }
             common.animation = args[i];

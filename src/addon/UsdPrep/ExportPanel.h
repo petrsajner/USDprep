@@ -47,6 +47,7 @@ private:
     bool _relinkTextures = true;
     int _materials = 0;  // 0 = preview (light), 1 = full (hero), 2 = all
     int _animation = 1;  // 0 = everything, 1 = the shot range, 2 = one frame
+    int _textureCap = 0;  // index into the cap choices (0 = no cap)
     double _staticFrame = 0.0;
     bool _staticFrameSet = false;  // typed by the artist, else the scene's start
 

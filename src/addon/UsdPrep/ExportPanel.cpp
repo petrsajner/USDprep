@@ -188,6 +188,12 @@ void ExportPanel::ChoosePreset(int choice, const std::string& recipePath) {
     _relinkTextures = _recipe.relinkTextures;
     _materials = _recipe.materialPurpose == "preview" ? 0 : _recipe.materialPurpose == "full" ? 1 : 2;
     _animation = _recipe.animation == "all" ? 0 : _recipe.animation == "static" ? 2 : 1;
+    _textureCap = _recipe.maxTextureSize >= 8192 ? 1
+                  : _recipe.maxTextureSize >= 4096 ? 2
+                  : _recipe.maxTextureSize >= 2048 ? 3
+                  : _recipe.maxTextureSize >= 1024 ? 4
+                  : _recipe.maxTextureSize > 0    ? 5
+                                                  : 0;
     _staticFrameSet = !std::isnan(_recipe.staticFrame);
     if (_staticFrameSet) _staticFrame = _recipe.staticFrame;
 
@@ -470,6 +476,19 @@ void ExportPanel::DrawAdvanced() {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("The frame to keep.");
     }
 
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Textures");
+    ImGui::SameLine();
+    const char* capChoices[] = {"Keep every texture as it is", "At most 8K (8192 px)", "At most 4K (4096 px)",
+                                "At most 2K (2048 px)",         "At most 1K (1024 px)", "At most 512 px"};
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::Combo("##texturecap", &_textureCap, capChoices, 6);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Hero textures come in 4K and 8K; a comp never sees that much.\n"
+                          "Larger textures are scaled down in the exported file only -\n"
+                          "the originals stay as they are.");
+    }
+
     std::string removed;
     for (const std::string& t : _recipe.dropTypes) removed += (removed.empty() ? "" : ", ") + t;
     for (const std::string& p : _recipe.dropPurposes) {
@@ -504,6 +523,8 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     options.materialPurpose = _materials == 0 ? "preview" : _materials == 1 ? "full" : "all";
     options.animation = _animation == 0 ? "all" : _animation == 1 ? "range" : "static";
     if (_animation == 2) options.staticFrame = _staticFrame;
+    static const int kCaps[] = {0, 8192, 4096, 2048, 1024, 512};
+    options.maxTextureSize = kCaps[_textureCap];
     options.outputPath = _outputPath;
     for (const SdfPath& p : targets) options.primPaths.push_back(p.GetAsString());
 

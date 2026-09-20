@@ -13,6 +13,8 @@
 #include <vector>
 
 #include <pxr/usd/sdf/assetPath.h>
+#include <pxr/base/gf/half.h>
+#include <pxr/base/gf/vec3i.h>
 #include <pxr/base/tf/diagnosticBase.h>
 #include <pxr/base/tf/diagnosticMgr.h>
 #include <pxr/base/tf/pathUtils.h>
@@ -31,6 +33,8 @@
 #include <pxr/usd/usd/primFlags.h>
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
+#include <pxr/imaging/hio/image.h>
+#include <pxr/imaging/hio/types.h>
 #include <pxr/usd/usdShade/material.h>
 #include <pxr/usd/usdShade/materialBindingAPI.h>
 #include <pxr/usd/usdShade/tokens.h>
@@ -592,6 +596,172 @@ inline void DropMissingDependencies(Report& rep, const std::string& tmpPath) {
                              names);
 }
 
+// A texture bigger than Nuke will ever show (hero 8K UDIM sets) is scaled
+// down to `maxSize` on its longer side — into a copy under the scratch
+// folder, which the packager or the localizer then picks up instead of
+// the original. The original file is never touched. USD's own Hio reads
+// and writes PNG, JPEG and EXR; anything it cannot read is left as it is
+// and named in the report.
+inline void CapTextures(Report& rep, const std::string& tmpPath, int maxSize) {
+    if (maxSize <= 0) return;
+    const SdfLayerRefPtr layer = SdfLayer::FindOrOpen(tmpPath);
+    if (!layer) return;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path scratch = fs::path(tmpPath).parent_path() / "textures";
+
+    size_t scaled = 0;
+    int largest = 0;
+    std::vector<std::string> untouched;         // formats this build cannot read
+    std::map<std::string, std::string> copies;  // source -> capped copy ("" = left as is)
+
+    // Copies keep their file name (a UDIM set has to stay a set) and go
+    // into a folder named after their source folder, so two sets that
+    // happen to share names do not collide.
+    const auto copyFolderFor = [&](const std::string& source) {
+        const std::string parent = fs::path(source).parent_path().string();
+        char name[24];
+        std::snprintf(name, sizeof(name), "%08zx", std::hash<std::string>{}(parent) & 0xffffffffu);
+        return scratch / name;
+    };
+
+    const auto capFile = [&](const std::string& source) -> std::string {
+        const auto known = copies.find(source);
+        if (known != copies.end()) return known->second;
+        copies[source] = "";
+        const HioImageSharedPtr image = HioImage::OpenForReading(
+            source, 0, 0, HioImage::SourceColorSpace::Raw, /*suppressErrors=*/true);
+        if (!image) {
+            untouched.push_back(source);
+            return "";
+        }
+        const int width = image->GetWidth();
+        const int height = image->GetHeight();
+        if (std::max(width, height) <= maxSize) return "";
+        const HioFormat format = image->GetFormat();
+        const HioType type = HioGetHioType(format);
+        const int channels = HioGetComponentCount(format);
+        if (type != HioTypeUnsignedByte && type != HioTypeUnsignedByteSRGB &&
+            type != HioTypeHalfFloat && type != HioTypeFloat) {
+            untouched.push_back(source);
+            return "";
+        }
+        std::vector<unsigned char> src(HioGetDataSize(format, GfVec3i(width, height, 1)));
+        HioImage::StorageSpec in;
+        in.width = width;
+        in.height = height;
+        in.depth = 1;
+        in.format = format;
+        in.data = src.data();
+        if (!image->Read(in)) {
+            untouched.push_back(source);
+            return "";
+        }
+
+        const double factor = static_cast<double>(maxSize) / std::max(width, height);
+        const int newWidth = std::max(1, static_cast<int>(std::lround(width * factor)));
+        const int newHeight = std::max(1, static_cast<int>(std::lround(height * factor)));
+        std::vector<unsigned char> dst(HioGetDataSize(format, GfVec3i(newWidth, newHeight, 1)));
+        const auto load = [&](size_t index) -> float {
+            switch (type) {
+                case HioTypeHalfFloat: return static_cast<float>(reinterpret_cast<const GfHalf*>(src.data())[index]);
+                case HioTypeFloat: return reinterpret_cast<const float*>(src.data())[index];
+                default: return src[index] / 255.0f;
+            }
+        };
+        const auto store = [&](size_t index, float value) {
+            switch (type) {
+                case HioTypeHalfFloat: reinterpret_cast<GfHalf*>(dst.data())[index] = GfHalf(value); break;
+                case HioTypeFloat: reinterpret_cast<float*>(dst.data())[index] = value; break;
+                default: dst[index] = static_cast<unsigned char>(std::lround(std::min(std::max(value, 0.0f), 1.0f) * 255.0f)); break;
+            }
+        };
+        // Area average: every output pixel is the mean of the source box
+        // it covers. Not fancy, but it never rings and never aliases.
+        for (int y = 0; y < newHeight; ++y) {
+            const int y0 = y * height / newHeight;
+            const int y1 = std::max(y0 + 1, (y + 1) * height / newHeight);
+            for (int x = 0; x < newWidth; ++x) {
+                const int x0 = x * width / newWidth;
+                const int x1 = std::max(x0 + 1, (x + 1) * width / newWidth);
+                const float count = static_cast<float>((y1 - y0) * (x1 - x0));
+                for (int c = 0; c < channels; ++c) {
+                    float sum = 0.0f;
+                    for (int sy = y0; sy < y1; ++sy) {
+                        for (int sx = x0; sx < x1; ++sx) {
+                            sum += load((static_cast<size_t>(sy) * width + sx) * channels + c);
+                        }
+                    }
+                    store((static_cast<size_t>(y) * newWidth + x) * channels + c, sum / count);
+                }
+            }
+        }
+
+        const fs::path folder = copyFolderFor(source);
+        fs::create_directories(folder, ec);
+        const fs::path copy = folder / fs::path(source).filename();
+        const HioImageSharedPtr out = HioImage::OpenForWriting(copy.string());
+        HioImage::StorageSpec spec;
+        spec.width = newWidth;
+        spec.height = newHeight;
+        spec.depth = 1;
+        spec.format = format;
+        spec.data = dst.data();
+        if (!out || !out->Write(spec)) {
+            untouched.push_back(source);
+            return "";
+        }
+        ++scaled;
+        largest = std::max(largest, std::max(width, height));
+        copies[source] = copy.string();
+        return copy.string();
+    };
+
+    UsdUtilsModifyAssetPaths(layer, [&](const std::string& assetPath) -> std::string {
+        if (assetPath.empty()) return assetPath;
+        if (UsdShadeUdimUtils::IsUdimIdentifier(assetPath)) {
+            const auto tiles = UsdShadeUdimUtils::ResolveUdimTilePaths(assetPath, layer);
+            if (tiles.empty()) return assetPath;
+            bool any = false;
+            for (const auto& tile : tiles) {
+                if (!capFile(tile.first).empty()) any = true;
+            }
+            if (!any) return assetPath;
+            // the set stays whole: tiles under the cap are copied as they are
+            const fs::path folder = copyFolderFor(tiles.front().first);
+            for (const auto& tile : tiles) {
+                if (copies[tile.first].empty()) {
+                    fs::copy_file(tile.first, folder / fs::path(tile.first).filename(),
+                                  fs::copy_options::overwrite_existing, ec);
+                }
+            }
+            return (folder / fs::path(assetPath).filename()).string();
+        }
+        const std::string resolved =
+            ArGetResolver().Resolve(SdfComputeAssetPathRelativeToLayer(layer, assetPath)).GetPathString();
+        if (resolved.empty()) return assetPath;
+        const std::string copy = capFile(resolved);
+        return copy.empty() ? assetPath : copy;
+    });
+    layer->Save();
+
+    if (scaled > 0) {
+        rep.Info("textures", std::to_string(scaled) + " texture file(s) larger than " +
+                                 std::to_string(maxSize) + " px scaled down (largest was " +
+                                 std::to_string(largest) + " px)");
+    }
+    if (!untouched.empty()) {
+        std::string names;
+        for (size_t i = 0; i < untouched.size() && i < 3; ++i) {
+            names += (i == 0 ? "" : ", ") + fs::path(untouched[i]).filename().string();
+        }
+        if (untouched.size() > 3) names += ", ...";
+        rep.Warn("textures", std::to_string(untouched.size()) +
+                                 " texture file(s) in a format this build cannot read were left "
+                                 "as they are: " + names);
+    }
+}
+
 // Copy every external dependency (textures, including whole UDIM tile
 // sets) next to the output and rewrite the asset paths to point there —
 // the .usdc/.usda counterpart of what .usdz packaging does. Without this
@@ -676,11 +846,13 @@ inline bool RelinkDependencies(Report& rep, const std::string& outputPath,
 // Shared tail: turn the flattened temp file into the requested output
 // (rename, or localize into a .usdz package), then gather after-numbers.
 inline void FinalizeOutput(Report& rep, const std::string& outputPath,
-                           const std::string& tmpPath, bool relinkTextures) {
+                           const std::string& tmpPath, bool relinkTextures,
+                           int maxTextureSize) {
     namespace fs = std::filesystem;
     std::error_code ec;
 
     DropMissingDependencies(rep, tmpPath);
+    CapTextures(rep, tmpPath, maxTextureSize);
 
     if (HasExtension(outputPath, ".usdz")) {
         if (!UsdUtilsCreateNewUsdzPackage(SdfAssetPath(tmpPath), outputPath)) {

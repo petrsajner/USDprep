@@ -1,0 +1,57 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for the texture cap: one texture and one UDIM set above the
+# cap used by the test, and the 1x1 checker that is below any cap.
+def Xform "Root"
+{
+    def Mesh "Panel"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        rel material:binding = </Root/Looks/PanelMaterial>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "PanelMaterial"
+        {
+            token outputs:surface.connect = </Root/Looks/PanelMaterial/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/PanelMaterial/BigTexture.outputs:rgb>
+                float inputs:roughness.connect = </Root/Looks/PanelMaterial/Tiles.outputs:r>
+                float inputs:metallic.connect = </Root/Looks/PanelMaterial/Small.outputs:r>
+                token outputs:surface
+            }
+
+            def Shader "BigTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/big.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "Tiles"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/big.<UDIM>.png@
+                float outputs:r
+            }
+
+            def Shader "Small"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/checker.png@
+                float outputs:r
+            }
+        }
+    }
+}

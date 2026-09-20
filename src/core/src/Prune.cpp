@@ -62,6 +62,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         extractOptions.stripRenderContexts = options.stripRenderContexts;
         extractOptions.stripUnusedMaterials = options.stripUnusedMaterials;
         extractOptions.stripDrawModeCards = options.stripDrawModeCards;
+        extractOptions.maxTextureSize = options.maxTextureSize;
         extractOptions.animation = options.animation;
         extractOptions.frameStart = options.frameStart;
         extractOptions.frameEnd = options.frameEnd;
@@ -176,7 +177,8 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
     }
     flat->Save();
 
-    FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures);
+    FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
+                   options.maxTextureSize);
 }
 
 }  // namespace

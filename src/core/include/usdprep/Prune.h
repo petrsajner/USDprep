@@ -26,6 +26,7 @@ struct PruneOptions {
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
     bool stripDrawModeCards = true;
+    int maxTextureSize = 0;
     // Animation, as in ExtractOptions.
     std::string animation = "all";
     double frameStart = kStageFrame;

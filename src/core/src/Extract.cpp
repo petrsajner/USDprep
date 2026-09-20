@@ -94,7 +94,8 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
         flat->Save();
     }
 
-    FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures);
+    FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
+                   options.maxTextureSize);
 }
 
 }  // namespace

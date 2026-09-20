@@ -96,6 +96,35 @@ there; Nuke draws that.
 **ALab projector, nuke preset: 4.56 MB → 686 KB** — one preview JPG
 inside the package instead of six card PNGs and a UDIM set.
 
+## Textures: the resolution cap (2026-09-20)
+
+`maxTextureSize` (nuke preset 4096, raw 0): a texture larger than that
+on its longer side is read through USD's own Hio, area-averaged down,
+written back in the same format into the scratch folder, and the
+flattened layer repointed at the copy — the packager or the localizer
+then take the copy, the original is never touched. UDIM sets go tile by
+tile and stay a set (tiles under the cap are copied as they are next to
+the scaled ones). Formats Hio cannot read are left alone and named.
+CLI `--max-texture <px>`; panel: Advanced → Textures (8K / 4K / 2K / 1K /
+512 / no cap).
+
+**ALab stoat outfit, full-quality materials, still frame 1030** (the
+EXR UDIM tiles are 1024 px):
+
+| cap | package |
+|---|---|
+| none / 1024 | 24.4 MB |
+| 512 | 9.6 MB — 12 EXR tiles at 512×512 |
+
+So the M3 "≥70 %" holds for the hero-material case too, with a cap.
+What this cannot do yet: `.tex/.tx/.rat` (no reader without OpenImageIO)
+and format conversion (EXR → JPEG for previews) — both wait for the
+release build with OIIO.
+
+Fixture `bigtex_scene.usda` (a 256×128 PNG, a 200×100 UDIM pair, the
+1×1 checker) and `test_textures` pin the scaling, the untouched
+originals, the package and the presets.
+
 ## What the environment does not have
 
 - **OpenImageIO** and **meshoptimizer** are not in the conda USD env.
@@ -108,4 +137,4 @@ inside the package instead of six card PNGs and a UDIM set.
 
 ## Next
 
-- Textures op (OIIO) and Simplify (meshoptimizer) after that.
+- Simplify (meshoptimizer, vendored) — the last M3 op.
