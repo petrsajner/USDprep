@@ -2,6 +2,7 @@
 // where — and the button.
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,10 @@ public:
 
     // Height of the section as drawn last frame; the tree above reserves it.
     float LastHeight() const { return _lastHeight; }
+
+    // A click on an entry of the export list: "show me that one" — the
+    // tree and the 3D view select it. Set by the panel that owns both.
+    std::function<void(const pxr::SdfPath&)> onPick;
 
 private:
     void DrawList(const std::vector<pxr::SdfPath>& selectionRoots);

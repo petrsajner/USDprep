@@ -30,6 +30,8 @@ using namespace usdprep_addon;
 
 constexpr const char* kAddonId = "UsdPrep";
 constexpr const char* kPanelTitle = "Prep for Nuke";
+// Type size of the whole panel relative to the rest of the app.
+constexpr float kPanelFontScale = 1.3f;
 
 SceneTree& Tree() {
     static SceneTree tree;
@@ -38,6 +40,11 @@ SceneTree& Tree() {
 
 ExportPanel& Exporter() {
     static ExportPanel panel;
+    static const bool wired = [] {
+        panel.onPick = [](const SdfPath& path) { Tree().Select(path); };
+        return true;
+    }();
+    (void)wired;
     return panel;
 }
 
@@ -121,9 +128,13 @@ void DrawPrepPanel() {
 
     Tree().HandleGlobalKeys(stage);
 
+    // One type size for the whole panel, larger than the editor around it.
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * kPanelFontScale);
+
     // ----- header --------------------------------------------------------
     std::string sceneName = stage->GetRootLayer() ? stage->GetRootLayer()->GetDisplayName() : "";
     if (sceneName.empty()) sceneName = "untitled scene";
+    ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(sceneName.c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("%d objects", ObjectCount(stage));
@@ -131,7 +142,7 @@ void DrawPrepPanel() {
                     ImGui::CalcTextSize("Clear selection").x - ImGui::GetStyle().FramePadding.x * 2.0f);
     const std::vector<SdfPath> roots = SceneTree::ExportRoots(stage);
     if (roots.empty()) ImGui::BeginDisabled();
-    if (ImGui::SmallButton("Clear selection")) {
+    if (ImGui::Button("Clear selection")) {
         // same route as the tree takes: after the frame, through the queue
         ExecuteAfterDraw([](UsdStageRefPtr s) {
             if (Editor* editor = usdtweak::GetEditor()) editor->GetSelection().Clear(s);
@@ -147,6 +158,8 @@ void DrawPrepPanel() {
     // ----- tree, then export ---------------------------------------------
     Tree().Draw(stage, Exporter().LastHeight());
     Exporter().Draw(stage, roots);
+
+    ImGui::PopFont();
 }
 
 TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, UsdPrep) {

@@ -26,6 +26,30 @@ namespace {
 
 constexpr const char* kAddonId = "UsdPrep";
 
+// The three buttons that matter are found before anything is read:
+// bigger than the rest, and each in its own colour.
+const ImVec4 kAddColor(0.16f, 0.44f, 0.62f, 1.0f);     // into the list: blue
+const ImVec4 kClearColor(0.48f, 0.24f, 0.24f, 1.0f);   // out of the list: brown-red
+const ImVec4 kExportColor(0.18f, 0.55f, 0.28f, 1.0f);  // go: green
+const ImVec4 kListBackground(0.12f, 0.17f, 0.23f, 1.0f);
+const ImVec4 kSelectedText(1.0f, 0.85f, 0.2f, 1.0f);   // same yellow as the tree
+
+bool BigButton(const char* label, const ImVec4& color, const ImVec2& size) {
+    const ImVec4 hover(std::min(color.x * 1.3f, 1.0f), std::min(color.y * 1.3f, 1.0f),
+                       std::min(color.z * 1.3f, 1.0f), 1.0f);
+    const ImVec4 active(color.x * 0.8f, color.y * 0.8f, color.z * 0.8f, 1.0f);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleColor(ImGuiCol_Button, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x * 2.0f, style.FramePadding.y * 2.2f));
+    const bool pressed = ImGui::Button(label, size);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    return pressed;
+}
+
 const char* PresetLabel(const std::string& name) {
     if (name == "nuke") return "Nuke-ready";
     if (name == "raw") return "Raw copy";
@@ -228,9 +252,13 @@ void ExportPanel::DrawPreset() {
 // ---------------------------------------------------------------------------
 
 void ExportPanel::DrawList(const std::vector<SdfPath>& selectionRoots) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+
+    // ----- the two list buttons, side by side above the list -----------
+    const float half = (ImGui::GetContentRegionAvail().x - style.ItemSpacing.x) * 0.5f;
     const bool canAdd = !selectionRoots.empty();
     if (!canAdd) ImGui::BeginDisabled();
-    if (ImGui::Button("Add to export")) {
+    if (BigButton("Add to export", kAddColor, ImVec2(half, 0.0f))) {
         for (const SdfPath& p : selectionRoots) {
             if (std::find(_list.begin(), _list.end(), p) == _list.end()) _list.push_back(p);
         }
@@ -241,25 +269,46 @@ void ExportPanel::DrawList(const std::vector<SdfPath>& selectionRoots) {
                           "go on and pick more. Export then takes the whole list.");
     }
     ImGui::SameLine();
-    if (_list.empty()) {
-        ImGui::TextDisabled("Export list is empty: Export takes the selection.");
-        return;
-    }
-    ImGui::Text("Export list: %d object(s)", static_cast<int>(_list.size()));
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Clear list")) _list.clear();
+    if (_list.empty()) ImGui::BeginDisabled();
+    if (BigButton("Clear list", kClearColor, ImVec2(half, 0.0f))) _list.clear();
+    if (_list.empty()) ImGui::EndDisabled();
 
+    // ----- what Export will take, in a frame of its own ----------------
+    // The list when there is one; otherwise the selection, so the frame
+    // always answers "what goes out if I press Export now".
+    const bool fromList = !_list.empty();
+    const std::vector<SdfPath>& shown = fromList ? _list : selectionRoots;
     const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
-    const float listHeight = rowHeight * std::min<float>(static_cast<float>(_list.size()), 5.0f) +
-                             ImGui::GetStyle().FramePadding.y * 2.0f;
-    ImGui::BeginChild("export-list", ImVec2(0.0f, listHeight), ImGuiChildFlags_Borders);
-    for (size_t i = 0; i < _list.size(); /*advanced in loop*/) {
+    const float rows = std::min<float>(std::max<float>(static_cast<float>(shown.size()), 1.0f), 6.0f);
+    const float frameHeight = rowHeight * (rows + 1.0f) + style.WindowPadding.y * 2.0f;
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, kListBackground);
+    ImGui::BeginChild("export-list", ImVec2(0.0f, frameHeight),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+    if (fromList) {
+        ImGui::Text("To export: %d object(s)", static_cast<int>(shown.size()));
+    } else if (shown.empty()) {
+        ImGui::TextDisabled("Nothing to export yet - pick an object.");
+    } else {
+        ImGui::Text("To export (the selection): %d object(s)", static_cast<int>(shown.size()));
+    }
+    for (size_t i = 0; i < shown.size(); /*advanced in loop*/) {
+        const SdfPath path = shown[i];
         ImGui::PushID(static_cast<int>(i));
-        const bool remove = ImGui::SmallButton("x");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove from the export list");
-        ImGui::SameLine();
-        ImGui::TextUnformatted(_list[i].GetName().c_str());
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", _list[i].GetText());
+        bool remove = false;
+        if (fromList) {
+            remove = ImGui::SmallButton("x");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove from the export list");
+            ImGui::SameLine();
+        }
+        // An entry that is the current selection is yellow, like in the
+        // tree; a click makes any entry the selection and shows it.
+        const bool isSelected =
+            std::find(selectionRoots.begin(), selectionRoots.end(), path) != selectionRoots.end();
+        ImGui::PushStyleColor(ImGuiCol_Text, isSelected ? kSelectedText
+                                                        : ImGui::GetStyleColorVec4(ImGuiCol_Text));
+        if (ImGui::Selectable(path.GetName().c_str(), false) && onPick) onPick(path);
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\nClick to select it in the tree and the 3D view.", path.GetText());
         ImGui::PopID();
         if (remove) {
             _list.erase(_list.begin() + static_cast<long>(i));
@@ -268,6 +317,7 @@ void ExportPanel::DrawList(const std::vector<SdfPath>& selectionRoots) {
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 // ---------------------------------------------------------------------------
@@ -424,7 +474,7 @@ void ExportPanel::DrawRun(const UsdStageRefPtr& stage, const std::vector<SdfPath
     }
     char label[64];
     std::snprintf(label, sizeof(label), "Export %d object(s)", static_cast<int>(targets.size()));
-    if (ImGui::Button(targets.empty() ? "Export" : label, ImVec2(-1.0f, 0.0f))) {
+    if (BigButton(targets.empty() ? "Export" : label, kExportColor, ImVec2(-1.0f, 0.0f))) {
         Run(stage, targets);
     }
     if (!blocker.empty()) ImGui::EndDisabled();

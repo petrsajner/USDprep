@@ -63,6 +63,28 @@ objects, 54 meshes, 210 KB" with the report behind "Details".
   opened; simple mode flips it back when the flag turns on in the same
   frame the stage changes, and leaves a Windows-menu choice alone.
 
+## Slice 3 (2026-09-20): the export section, after the first real use
+
+Feedback after an hour with ALab, all of it about finding things at a
+glance rather than reading:
+
+- one type size for the whole panel (the tree's 1.3x), export section
+  and header included
+- "Add to export" and "Clear list" twice the size, coloured (blue / brown-
+  red), side by side *above* the list
+- the list sits in its own tinted frame headed "To export: N object(s)";
+  while the list is empty the frame shows the current selection instead,
+  so it always answers "what goes out if I press Export now"
+- a click on a list entry selects that object in the tree and the 3D
+  view (the entry that *is* the selection is yellow, like in the tree) -
+  the quick visual check before pressing Export
+- Export: full width, tall, green
+- "Clear selection" grew with the panel's type size
+
+USD's own warnings now reach the report's Details (coalescing delegate
+around every operation, known noise folded into one line) - see the
+core commits af49acb and 7850e95.
+
 ## Decisions taken along the way
 
 - Plain click on a selected row deselects that row and everything under

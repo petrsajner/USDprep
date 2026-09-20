@@ -31,8 +31,9 @@ public:
     // export takes.
     static std::vector<pxr::SdfPath> ExportRoots(const pxr::UsdStageRefPtr& stage);
 
-    // Type size of the tree relative to the rest of the app.
-    float fontScale = 1.3f;
+    // Make this the selection and show it: the export list's "where is
+    // that one again" click.
+    void Select(const pxr::SdfPath& path);
 
 private:
     void ObserveSelection(const pxr::UsdStageRefPtr& stage);

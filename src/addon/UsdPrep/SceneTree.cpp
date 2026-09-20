@@ -171,6 +171,12 @@ void SceneTree::RevealPath(const SdfPath& path) {
     _filter[0] = '\0';
 }
 
+void SceneTree::Select(const SdfPath& path) {
+    if (!_stage || !_stage->GetPrimAtPath(path)) return;
+    ApplySelection({path});
+    RevealPath(path);
+}
+
 void SceneTree::OnRowClicked(const SdfPath& path, bool selected) {
     std::vector<SdfPath> next;
     if (selected) {
@@ -329,9 +335,8 @@ void SceneTree::Draw(const UsdStageRefPtr& stage, float reservedBelow) {
     ImGui::InputTextWithHint("##search", "Search objects...", _filter, sizeof(_filter));
     UpdateFilter(stage);
 
-    const float fontSize = ImGui::GetStyle().FontSizeBase * fontScale;
-    ImGui::PushFont(nullptr, fontSize);
-    ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, fontSize * 1.1f);
+    // The panel's type size is pushed by the caller; the indent follows it.
+    ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, ImGui::GetFontSize() * 1.1f);
     ImGui::BeginChild("scene-tree", ImVec2(0.0f, -reservedBelow), ImGuiChildFlags_Borders);
     for (const UsdPrim& child : stage->GetPseudoRoot().GetFilteredChildren(ShownPrims())) {
         DrawRow(child, false, false);
@@ -341,7 +346,6 @@ void SceneTree::Draw(const UsdStageRefPtr& stage, float reservedBelow) {
     }
     ImGui::EndChild();
     ImGui::PopStyleVar();
-    ImGui::PopFont();
 
     // one-shot: the reveal was drawn this frame
     _pendingOpen.clear();
