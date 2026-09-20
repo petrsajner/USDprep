@@ -94,6 +94,9 @@ def main():
     os.replace(os.path.join(bin_dir, "usdtweak.exe"), os.path.join(bin_dir, "USDprep.exe"))
     shutil.copy2(os.path.join(ROOT, "LICENSE"), os.path.join(bundle, "LICENSE.txt"))
     shutil.copy2(os.path.join(ROOT, "NOTICE"), os.path.join(bundle, "NOTICE.txt"))
+    # the user manual is rebuilt for this version and goes along
+    subprocess.run([sys.executable, os.path.join(ROOT, "tools", "make-manual.py")], check=True)
+    shutil.copy2(os.path.join(ROOT, "docs", "manual", "USDprep_User_Manual.pdf"), bundle)
     shutil.copytree(os.path.join(ENV, "Library", "bin", "usd"), os.path.join(bin_dir, "usd"))
     shutil.copytree(plugin_src, os.path.join(bundle, "plugin", "usd"),
                     ignore=shutil.ignore_patterns("*.lib", "*.pdb"))

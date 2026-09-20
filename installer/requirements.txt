@@ -10,7 +10,7 @@ What this computer needs
     Intel) that provides OpenGL 4.5. Any computer that runs Nuke 16 or 17
     qualifies. Without it the 3D view stays empty; the usdcut command line
     tool works regardless.
-  - About 250 MB of disk space
+  - About 100 MB of disk space
 
 What this installer does
 

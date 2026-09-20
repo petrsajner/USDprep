@@ -36,6 +36,7 @@ Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{group}\USDprep"; Filename: "{app}\bin\USDprep.exe"; WorkingDir: "{userdocs}"
+Name: "{group}\USDprep User Manual"; Filename: "{app}\USDprep_User_Manual.pdf"
 Name: "{group}\Uninstall USDprep"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\USDprep"; Filename: "{app}\bin\USDprep.exe"; WorkingDir: "{userdocs}"; Tasks: desktopicon
 
@@ -46,6 +47,7 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 
 [Run]
 Filename: "{app}\bin\USDprep.exe"; Description: "Start USDprep"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\USDprep_User_Manual.pdf"; Description: "Open the user manual"; Flags: shellexec nowait postinstall skipifsilent unchecked
 
 [Code]
 function NeedsAddPath(Dir: string): Boolean;
