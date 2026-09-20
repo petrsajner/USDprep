@@ -33,7 +33,12 @@ for script in sorted(glob.glob(FOLDER + "/*.nk")):
         new = [n for n in nuke.allNodes() if n.name() not in before]
         scene = [n for n in new if n.Class() == "Scene"][0]
         entry["nodes"] = sorted(n.Class() for n in new)
-        lo, hi = bounds(FOLDER + "/" + name + ".obj")
+        geo_file = [n for n in new if n.Class() == "ReadGeo2"][0]["file"].value()
+        if geo_file.endswith(".obj"):
+            lo, hi = bounds(FOLDER + "/" + name + ".obj")
+        else:  # an .abc is binary: the box comes from the environment, "x0,y0,z0,x1,y1,z1"
+            box = [float(v) for v in os.environ["USDPREP_BOX"].split(",")]
+            lo, hi = box[:3], box[3:]
         centre = [(a + b) / 2.0 for a, b in zip(lo, hi)]
         radius = 0.5 * math.sqrt(sum((b - a) ** 2 for a, b in zip(lo, hi)))
         dist = radius * 3.2
@@ -48,9 +53,14 @@ for script in sorted(glob.glob(FOLDER + "/*.nk")):
         w = nuke.createNode("Write", inpanel=False)
         w.setInput(0, ren)
         w["channels"].setValue("rgba")
-        out = "%s/%s_%s.png" % (FOLDER, name, TAG)
+        out = "%s/%s_%s.####.png" % (FOLDER, name, TAG)
         w["file"].setValue(out); w["file_type"].setValue("png")
-        nuke.execute(w, 1, 1)
+        entry["frames"] = {}
+        for frame in [int(v) for v in os.environ.get("USDPREP_FRAMES", "1").split(",")]:
+            nuke.execute(w, frame, frame)
+            nuke.frame(frame)
+            xs = [x for x in range(8, SIZE, 16) for y in range(8, SIZE, 16) if ren.sample("alpha", x, y) > 0.5]
+            entry["frames"][frame] = {"covered": len(xs), "centre_x": round(sum(xs) / float(len(xs)) / SIZE, 3) if xs else None}
         entry["image"] = out
         entry["errors"] = [n.name() + ": " + n.error() for n in new if n.hasError()]
         for n in [w, ren, cam] + new:

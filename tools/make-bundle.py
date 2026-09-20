@@ -113,7 +113,8 @@ def main():
         if os.path.isdir(texts):
             shutil.copytree(texts, os.path.join(licenses, info["name"]), dirs_exist_ok=True)
     for base, label in ((os.path.join(ROOT, "third_party", "usdtweak"), "usdtweak"),
-                        (os.path.join(ROOT, "src", "third_party", "meshoptimizer"), "meshoptimizer")):
+                        (os.path.join(ROOT, "src", "third_party", "meshoptimizer"), "meshoptimizer"),
+                        (os.path.join(ROOT, "third_party", "alembic-src"), "alembic")):
         for name in ("LICENSE", "LICENSE.md", "LICENSE.txt"):
             if os.path.exists(os.path.join(base, name)):
                 os.makedirs(os.path.join(licenses, label), exist_ok=True)

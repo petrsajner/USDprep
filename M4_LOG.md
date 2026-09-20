@@ -58,7 +58,7 @@ removed on uninstall). The first page states the requirements (OpenGL
 
 | Item | State |
 |---|---|
-| Own USD build with OpenImageIO / Alembic | **probably not needed** - measured: Nuke reads `.tx` itself, and with a Nuke 16 floor `.abc/.obj/.fbx` export has no reason (`NUKE_COMPAT.md`). OIIO would only let *us* resize/atlas `.tx`/TIFF textures; today those are passed through untouched and reported |
+| Own USD build with OpenImageIO | **not needed for Nuke** - measured: Nuke reads `.tx` itself (`NUKE_COMPAT.md`). OIIO would only let *us* resize/atlas `.tx`/TIFF textures; today those are passed through untouched and reported |
 | Linux build + AppImage | not started — no Linux machine here |
 | Nuke matrix | 16.1v4 and 17.0v1 measured (`NUKE_COMPAT.md`), identical; 16.0 is not installed |
 | First-run GPU check (clear message below OpenGL 4.5) | usdtweak prints the GL version at start; behaviour on an old driver not tested |
@@ -87,3 +87,27 @@ removed on uninstall). The first page states the requirements (OpenGL
   from anywhere - and a "How to move (?)" tooltip with the mouse
   controls. While walking (right button held) the arrows, F and A belong
   to the 3D view, not to the tree.
+
+## Slice 3: older Nuke - .obj and .abc
+
+Petr: `.abc/.fbx/.obj` are the only way to open a 3D object in an older
+Nuke, and the test is the classic ReadGeo. Both `.obj` and `.abc` are
+written now (`MeshExport.cpp`, `AbcWriter.cpp`), each with a `.nk` that
+wires the textures in; details and what the classic 3D taught us are in
+`NUKE_COMPAT.md`. The panel offers three formats: USD, Alembic, OBJ.
+
+Alembic, the library: it is **not on conda-forge** (the package called
+`alembic` there is SQLAlchemy's migration tool - added by mistake,
+removed again). So: `pixi add imath`, and Alembic 1.8.8 built from the
+official source archive as a static library, Ogawa only:
+
+```
+curl -L -o alembic.tar.gz https://github.com/alembic/alembic/archive/refs/tags/1.8.8.tar.gz
+cmake -S alembic-src -B alembic-build -G "Visual Studio 16 2019" -A x64   -DCMAKE_PREFIX_PATH=<env>/Library -DCMAKE_INSTALL_PREFIX=third_party/alembic-install   -DALEMBIC_SHARED_LIBS=OFF -DUSE_TESTS=OFF -DUSE_BINARIES=OFF -DUSE_HDF5=OFF
+cmake --build alembic-build --config RelWithDebInfo --target install
+```
+
+The core finds it in `third_party/alembic-install` (optional: without it
+everything else builds and an `.abc` output fails with a clear message).
+The bundle grew by `Imath.dll` - 98 binaries, 80 MB, installer 20 MB;
+`.abc` export was run from the bundle in a clean environment.

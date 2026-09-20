@@ -27,6 +27,9 @@ namespace {
 
 constexpr const char* kAddonId = "UsdPrep";
 
+// 0 = .usdc, 1 = .abc, 2 = .obj - the order of the format list.
+const char* FormatExtension(int format) { return format == 1 ? ".abc" : format == 2 ? ".obj" : ".usdc"; }
+
 // The three buttons that matter are found before anything is read:
 // bigger than the rest, and each in its own colour.
 const ImVec4 kAddColor(0.16f, 0.44f, 0.62f, 1.0f);     // into the list: blue
@@ -114,7 +117,7 @@ std::string DialogResult(IFileDialog* dialog) {
 }
 
 // Native "Save as...". False = cancelled.
-bool NativeSaveDialog(const std::string& suggestedName, bool obj, std::string& outPath) {
+bool NativeSaveDialog(const std::string& suggestedName, int format, std::string& outPath) {
     if (!EnsureCom()) return false;
     IFileSaveDialog* dialog = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER,
@@ -123,10 +126,11 @@ bool NativeSaveDialog(const std::string& suggestedName, bool obj, std::string& o
     }
     // Both formats Nuke was measured to read: USD, and .obj for its classic 3D.
     const COMDLG_FILTERSPEC filters[] = {{L"USD for Nuke (*.usdc)", L"*.usdc"},
+                                         {L"Alembic for older Nuke (*.abc)", L"*.abc"},
                                          {L"OBJ for older Nuke (*.obj)", L"*.obj"}};
-    dialog->SetFileTypes(2, filters);
-    dialog->SetFileTypeIndex(obj ? 2 : 1);
-    dialog->SetDefaultExtension(obj ? L"obj" : L"usdc");
+    dialog->SetFileTypes(3, filters);
+    dialog->SetFileTypeIndex(format + 1);
+    dialog->SetDefaultExtension(format == 1 ? L"abc" : format == 2 ? L"obj" : L"usdc");
     const std::wstring suggested = Utf8ToWide(suggestedName);
     if (!suggested.empty()) dialog->SetFileName(suggested.c_str());
     const std::string result = DialogResult(dialog);
@@ -378,7 +382,7 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (dir.empty()) dir = ".";
         std::string name = targets.front().GetName();
         if (name.empty()) name = "asset";
-        const std::string suggested = dir + "/" + name + (_format == 1 ? ".obj" : ".usdc");
+        const std::string suggested = dir + "/" + name + FormatExtension(_format);
         std::snprintf(_outputPath, sizeof(_outputPath), "%s", suggested.c_str());
     }
 
@@ -396,10 +400,11 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (stem.empty() && !targets.empty()) stem = targets.front().GetName();
         if (stem.empty()) stem = "asset";
         std::string chosen;
-        if (NativeSaveDialog(stem + (_format == 1 ? ".obj" : ".usdc"), _format == 1, chosen)) {
+        if (NativeSaveDialog(stem + FormatExtension(_format), _format, chosen)) {
             std::snprintf(_outputPath, sizeof(_outputPath), "%s", chosen.c_str());
             _pathEdited = true;
-            _format = (chosen.size() >= 4 && chosen.compare(chosen.size() - 4, 4, ".obj") == 0) ? 1 : 0;
+            const std::string ext = chosen.size() >= 4 ? chosen.substr(chosen.size() - 4) : std::string();
+            _format = ext == ".abc" ? 1 : ext == ".obj" ? 2 : 0;
         }
     }
 #else
@@ -412,23 +417,26 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
     // .obj for the classic one - the only 3D an older Nuke has.
     const char* formats[] = {
         "USD (.usdc) - Nuke's current 3D system, materials and animation",
+        "Alembic (.abc) - older Nuke / classic 3D (ReadGeo): with animation",
         "OBJ (.obj) - older Nuke / classic 3D (ReadGeo): one still frame",
     };
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##format", &_format, formats, 2);
+    ImGui::Combo("##format", &_format, formats, 3);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     if (_format == 0) {
         ImGui::TextWrapped("A .usdc file with a \"%s_textures\" folder next to it - keep the two together.",
                            OutputNameOf(_outputPath).c_str());
     } else {
-        ImGui::TextWrapped("An .obj, its textures folder and \"%s.nk\": in Nuke, File > Insert Comp Nodes "
-                           "brings the geometry with its textures wired in. No animation in an .obj.",
-                           OutputNameOf(_outputPath).c_str());
+        ImGui::TextWrapped("The file, its textures folder and \"%s.nk\": in Nuke, File > Insert Comp Nodes "
+                           "brings the geometry with its textures wired in. %s",
+                           OutputNameOf(_outputPath).c_str(),
+                           _format == 1 ? "Animation is inside; set the Nuke project to the scene's frame rate."
+                                        : "No animation in an .obj - it is a still of one frame.");
     }
     ImGui::PopStyleColor();
     // The extension follows the format - fixed up, but never while the artist is typing.
     if (!editingPath && _outputPath[0] != '\0') {
-        const std::string synced = WithExtension(_outputPath, _format == 1 ? ".obj" : ".usdc");
+        const std::string synced = WithExtension(_outputPath, FormatExtension(_format));
         if (synced != _outputPath) std::snprintf(_outputPath, sizeof(_outputPath), "%s", synced.c_str());
     }
 }

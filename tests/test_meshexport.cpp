@@ -1,4 +1,4 @@
-// .obj for Nuke's classic 3D: a still in world space, one file per
+// .obj / .abc for Nuke's classic 3D: world space, one file per
 // material next to the complete one, and a .nk that wires textures in.
 #include <cstdio>
 #include <filesystem>
@@ -37,7 +37,7 @@ size_t Count(const std::string& text, const std::string& what) {
 
 bool Reported(const usdprep::Report& rep, const std::string& text) {
     for (const usdprep::ReportEntry& e : rep.entries) {
-        if (e.action == "obj" && e.detail.find(text) != std::string::npos) return true;
+        if ((e.action == "obj" || e.action == "abc") && e.detail.find(text) != std::string::npos) return true;
     }
     return false;
 }
@@ -93,6 +93,55 @@ int main() {
         CHECK(nk.find("atlas.obj") != std::string::npos);  // a single material: no parts folder
         CHECK(!fs::exists(outDir / "atlas_parts"));
         CHECK(Reported(rep, "1 with a texture wired in"));
+    }
+
+    // --- the UVs the material reads, not the ones called "st"; tiles brought home ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "uvset.obj").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/uvset_scene.usda", options);
+        CHECK(rep.ok);
+        const std::string obj = Slurp(outDir / "uvset.obj");
+        // previewuv, brought home by one tile - and not "st"
+        CHECK(obj.find("vt 0.25 0\nvt 0.75 0\nvt 0.75 1\nvt 0.25 1\n") != std::string::npos);
+        CHECK(obj.find("vt 0.5 0.5") == std::string::npos);
+        CHECK(Reported(rep, "an .abc carries the animation"));
+    }
+
+    // --- .abc: the animation goes along, and the .nk lists every object
+    //     (a ReadGeo made by a script loads only the first one otherwise) ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "uvset.abc").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/uvset_scene.usda", options);
+        if (rep.ok) {
+            CHECK(fs::file_size(outDir / "uvset.abc") > 0);
+            const std::string nk = Slurp(outDir / "uvset.nk");
+            CHECK(nk.find("uvset.abc") != std::string::npos);
+            CHECK(nk.find("scene_view {{0} imported: 0 1 selected: 0 1 items: /root/Root_Mover/Root_MoverShape "
+                          "/root/Root_Still/Root_StillShape}") != std::string::npos);
+            CHECK(nk.find("checker.png") != std::string::npos);
+            bool range = false;
+            for (const usdprep::ReportEntry& e : rep.entries) {
+                if (e.action == "abc" && e.detail.find("frames 1-3 at 25 fps") != std::string::npos) range = true;
+            }
+            CHECK(range);
+            CHECK(!fs::exists(outDir / "uvset.usdprep-source.usdc"));
+
+            // one frame asked for: a still, like an .obj
+            options.outputPath = (outDir / "uvset_still.abc").string();
+            options.animation = "static";
+            options.staticFrame = 3.0;
+            const usdprep::Report still = usdprep::ExtractPrims(FIXTURE_DIR "/uvset_scene.usda", options);
+            CHECK(still.ok);
+            CHECK(fs::file_size(outDir / "uvset_still.abc") < fs::file_size(outDir / "uvset.abc"));
+        } else {
+            // a build without the Alembic library says so instead of writing something else
+            CHECK(rep.error.find("no Alembic") != std::string::npos);
+            std::printf("note: built without Alembic, .abc checks skipped\n");
+        }
     }
 
     // --- nothing to write is an error, not an empty file ---

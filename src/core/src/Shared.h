@@ -951,19 +951,21 @@ inline bool RelinkDependencies(Report& rep, const std::string& outputPath,
     return true;
 }
 
-// MeshExport.cpp: the prepared .usdc written out as an .obj (plus a .nk
-// that wires the textures in) for Nuke's classic 3D; a still of `frame`.
-bool ExportObj(Report& rep, const std::string& usdPath, const std::string& objPath, double frame);
+// MeshExport.cpp: the prepared .usdc written out as an .obj or an .abc
+// (plus a .nk that wires the textures in) for Nuke's classic 3D. `frame`
+// picks the still; NaN = the scene's start for an .obj, the whole range
+// for an .abc.
+bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& outPath, double frame);
 
 // Shared tail: turn the flattened temp file into the requested output
 // (rename, or localize into a .usdz package), then gather after-numbers.
-// An .obj output is made from the finished .usdc, which is then removed.
+// An .obj / .abc output is made from the finished .usdc, which is then removed.
 inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
                            const std::string& tmpPath, bool relinkTextures,
                            int maxTextureSize, double frame) {
     namespace fs = std::filesystem;
     std::error_code ec;
-    const bool asObj = HasExtension(requestedPath, ".obj");
+    const bool asObj = HasExtension(requestedPath, ".obj") || HasExtension(requestedPath, ".abc");
     const fs::path requested(requestedPath);
     const std::string outputPath =
         asObj ? (requested.parent_path() / (requested.stem().string() + ".usdprep-source.usdc")).string()
@@ -1000,7 +1002,7 @@ inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
         rep.after = info.counts;
     }
     if (asObj) {
-        const bool written = ExportObj(rep, outputPath, requestedPath, frame);
+        const bool written = ExportMeshFile(rep, outputPath, requestedPath, frame);
         fs::remove(outputPath, ec);
         if (!written) return;
     }

@@ -82,14 +82,20 @@ meshes. `--as-is` skips these conversions, `--keep-udim` the atlas. Other
 applications are served by stock usdtweak or by building on
 `usdprep-core`, which still packages.
 
-**Older Nuke (classic 3D).** `-o car.obj` writes what the classic ReadGeo
-reads: a still in world space (`--frame` picks it) with UVs, the textures
-folder, one `.obj` per material in `car_parts/` when there are several,
-and `car.nk` - File > Insert Comp Nodes brings ReadGeo nodes with their
-textures wired in and a Scene joining them (Nuke reads no materials from
-an `.obj`). Everything the USD export does applies first: one material
-per mesh, skinning baked, shapes meshed, UDIM atlases with their UVs
-baked into the file.
+**Older Nuke (classic 3D).** An older Nuke has only the classic ReadGeo,
+which does not read USD the way 14+ does. `-o car.abc` and `-o car.obj`
+write what it does read: meshes in world space with the UVs the material
+uses - an `.abc` with the animation (the trimmed range, or one frame with
+`--frame`), an `.obj` as a still. Next to the file: the textures folder,
+one file per material in `car_parts/` when there are several (a ReadGeo
+takes one texture for all it reads), and `car.nk` - File > Insert Comp
+Nodes brings ReadGeo nodes with their textures wired in and a Scene
+joining them, because Nuke reads no materials from either format. Set the
+Nuke project to the scene's frame rate for an `.abc`. Everything the USD
+export does applies first: one material per mesh, skinning baked, shapes
+meshed, UDIM atlases with their UVs baked into the file. `.abc` needs the
+Alembic library at build time (`third_party/alembic-install`, see
+`M4_LOG.md`); without it the rest builds and an `.abc` output says so.
 
 **Textures.** They are copied into a `<name>_textures` folder next to the
 file, and the file points at the copies (single-tile UDIM sets become the

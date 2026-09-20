@@ -31,10 +31,13 @@ inline bool HasUsdExtension(const std::string& path) {
             path.compare(path.size() - 5, 5, ".usda") == 0);
 }
 
-// Length of the extension when it is one of ours (.usdc/.usda/.usdz, .obj), else 0.
+// Length of the extension when it is one of ours (.usdc/.usda/.usdz, .obj, .abc), else 0.
 inline size_t KnownExtensionLength(const std::string& path) {
     if (HasUsdExtension(path)) return 5;
-    if (path.size() >= 4 && path.compare(path.size() - 4, 4, ".obj") == 0) return 4;
+    if (path.size() >= 4 && (path.compare(path.size() - 4, 4, ".obj") == 0 ||
+                             path.compare(path.size() - 4, 4, ".abc") == 0)) {
+        return 4;
+    }
     return 0;
 }
 

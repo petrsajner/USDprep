@@ -59,7 +59,7 @@ private:
     bool _staticFrameSet = false;  // typed by the artist, else the scene's start
 
     char _outputPath[512] = "";
-    int _format = 0;  // 0 = .usdc (current 3D system), 1 = .obj (classic 3D, older Nuke)
+    int _format = 0;  // 0 = .usdc (current 3D system); classic 3D, older Nuke: 1 = .abc, 2 = .obj
     double _sceneStart = 0.0;  // the scene's frame range, for the labels
     double _sceneEnd = 0.0;
     pxr::UsdStageRefPtr _suggestedFor;

@@ -13,6 +13,7 @@ add_library(usdprep-core
     src/NukeCompat.cpp
     src/NukeGeometry.cpp
     src/MeshExport.cpp
+    src/AbcWriter.cpp
     src/StageInfo.cpp
 )
 add_library(usdprep::core ALIAS usdprep-core)
@@ -28,3 +29,16 @@ if(MSVC)
     target_compile_definitions(usdprep-core PRIVATE NOMINMAX)
 endif()
 target_compile_definitions(usdprep-core PRIVATE TBB_SUPPRESS_DEPRECATED_MESSAGES)
+
+# Alembic (.abc export for Nuke's classic 3D) is optional: without it the
+# core builds and an .abc output fails with a clear message. It is not on
+# conda-forge; third_party/alembic-install is a static build of the
+# official source (see M4_LOG.md), Imath comes from the USD environment.
+find_package(Alembic CONFIG QUIET PATHS "${CMAKE_CURRENT_LIST_DIR}/../../third_party/alembic-install" NO_DEFAULT_PATH)
+if(Alembic_FOUND)
+    message(STATUS "usdprep: Alembic found - .abc export enabled")
+    target_link_libraries(usdprep-core PRIVATE Alembic::Alembic)
+    target_compile_definitions(usdprep-core PRIVATE USDPREP_WITH_ALEMBIC)
+else()
+    message(STATUS "usdprep: Alembic not found - .abc export disabled")
+endif()

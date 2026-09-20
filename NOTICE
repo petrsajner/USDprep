@@ -7,4 +7,7 @@ licence as usdtweak, which USDprep is built on.
 USDprep includes or builds on:
   - usdtweak, Copyright 2016-2026 Cyril Pichard, Apache License 2.0
   - OpenUSD, Copyright Pixar and contributors (see licenses/openusd in a release)
+  - Alembic, Copyright 2009-2015 Sony Pictures Imageworks Inc. and Industrial Light & Magic
+    (statically linked; BSD-style licence, see licenses/alembic in a release)
+  - Imath, Copyright Contributors to the OpenEXR Project, BSD-3-Clause
   - meshoptimizer, Copyright 2016-2025 Arseny Kapoulkine, MIT License

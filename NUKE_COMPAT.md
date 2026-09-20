@@ -123,10 +123,32 @@ What follows for the plan:
     in 16.1 and 17.0 (`tools/nuke/probe_nk.py`): ALab's projector comes up
     textured, per-material colours arrive, UDIM-atlas UVs are baked into
     the file.
-  - `.abc` - the one that carries **animation**; needs the Alembic
-    library.
-  - `.fbx` - needs Autodesk's FBX SDK (proprietary) or a hand-written
-    ASCII writer; adds nothing over `.obj` + `.abc` for Nuke.
+  - `.abc` - **done** (`AbcWriter.cpp`): the same export with the
+    animation inside - world-space positions sampled at every frame of
+    the (trimmed) range, topology and UVs once; one frame asked for gives
+    a still. Checked in the classic 3D of 16.1 and 17.0: a skinned quad
+    (baked by the compat pass) travels left to right over frames 1-10,
+    and ALab's outfit - two meshes, 54 frames of cloth simulation,
+    26 MB, 1.5 s to export - comes up textured and moving.
+  - `.fbx` - not written: it needs Autodesk's FBX SDK (proprietary) or a
+    hand-written ASCII writer, and adds nothing over `.obj` + `.abc`.
+
+Three things the classic 3D taught us, all handled in `MeshExport.cpp`:
+
+- **A ReadGeo made by a script loads only the first object of an
+  `.abc`.** Python reports every item as imported, the render shows
+  one. With the items listed in the `scene_view` knob of the `.nk`
+  (`{{0} imported: 0 1 selected: 0 1 items: /root/a/aShape ...}`) all of
+  them load - so the `.nk` lists them.
+- **The UVs are whatever the material reads, not what is called `st`.**
+  ALab's preview materials look their texture up with `perfuv`; taking
+  `st` gave a sweater with black patches. The exporter follows the
+  texture's `st` input to its primvar reader (through our UDIM-atlas
+  transform if there is one) and writes that set.
+- **Classic Nuke shows black outside 0..1** where a renderer repeats the
+  texture. UVs that sit in another tile under a single repeating texture
+  are moved home face by face (each corner has its own UV in these
+  formats, so a face can move by whole tiles).
 
 ## What the tool does about it
 
