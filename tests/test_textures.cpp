@@ -117,6 +117,38 @@ int main() {
         CHECK(packageSize > 0 && packageSize < 60 * 1024);  // the originals alone are ~10 KB more
     }
 
+    // --- a single-tile UDIM set becomes the tile: Nuke reads that ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "solo.usdc").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/single_udim_scene.usda", options);
+        CHECK(rep.ok);
+        bool collapsed = false;
+        bool udimWarning = false;
+        for (const usdprep::ReportEntry& e : rep.entries) {
+            if (e.detail.find("single-tile UDIM") != std::string::npos) collapsed = true;
+            if (e.action == "nuke") udimWarning = true;
+        }
+        CHECK(collapsed);
+        CHECK(!udimWarning);
+        CHECK(!Find(outDir / "solo_textures", "solo.1001.png").empty());
+    }
+
+    // --- a multi-tile set and a .usdz are said out loud ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "warned.usdz").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(scene, options);
+        CHECK(rep.ok);
+        int nukeWarnings = 0;
+        for (const usdprep::ReportEntry& e : rep.entries) {
+            if (e.action == "nuke") ++nukeWarnings;
+        }
+        CHECK(nukeWarnings == 2);  // the UDIM set and the package
+    }
+
     // --- the presets ---
     {
         usdprep::Recipe nuke;

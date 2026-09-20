@@ -377,7 +377,7 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (dir.empty()) dir = ".";
         std::string name = targets.front().GetName();
         if (name.empty()) name = "asset";
-        const std::string suggested = dir + "/" + name + (_format == 0 ? ".usdz" : ".usdc");
+        const std::string suggested = dir + "/" + name + (_format == 1 ? ".usdz" : ".usdc");
         std::snprintf(_outputPath, sizeof(_outputPath), "%s", suggested.c_str());
     }
 
@@ -395,10 +395,10 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (stem.empty() && !targets.empty()) stem = targets.front().GetName();
         if (stem.empty()) stem = "asset";
         std::string chosen;
-        if (NativeSaveDialog(stem + (_format == 0 ? ".usdz" : ".usdc"), _format == 0, chosen)) {
+        if (NativeSaveDialog(stem + (_format == 1 ? ".usdz" : ".usdc"), _format == 1, chosen)) {
             std::snprintf(_outputPath, sizeof(_outputPath), "%s", chosen.c_str());
             _pathEdited = true;
-            _format = (chosen.size() >= 5 && chosen.compare(chosen.size() - 5, 5, ".usdz") == 0) ? 0 : 1;
+            _format = (chosen.size() >= 5 && chosen.compare(chosen.size() - 5, 5, ".usdz") == 0) ? 1 : 0;
         }
     }
 #else
@@ -408,19 +408,20 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
 #endif
 
     const char* formats[] = {
-        "Package (.usdz) - one file, textures inside",
-        "Layer (.usdc) - file + a folder with its textures",
+        "Layer (.usdc) + textures folder - what Nuke reads",
+        "Package (.usdz) - one file; Nuke 17 cannot read its textures",
     };
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::Combo("##format", &_format, formats, 2);
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Package: everything in one file. Best for sharing and for Nuke.\n"
-                          "Layer: the scene file plus a \"<name>_textures\" folder next to\n"
-                          "it. Keep the two together when you move the file.");
+        ImGui::SetTooltip("Layer: the scene file plus a \"<name>_textures\" folder next to it.\n"
+                          "Keep the two together. This is what Nuke 17 renders with textures.\n"
+                          "Package: one self-contained file for other applications - Nuke 17\n"
+                          "loads its geometry but not the textures inside it.");
     }
     // The extension follows the format - never while the artist is typing.
     if (!editingPath && _outputPath[0] != '\0') {
-        const std::string synced = WithExtension(_outputPath, _format == 0 ? ".usdz" : ".usdc");
+        const std::string synced = WithExtension(_outputPath, _format == 1 ? ".usdz" : ".usdc");
         if (synced != _outputPath) std::snprintf(_outputPath, sizeof(_outputPath), "%s", synced.c_str());
     }
 }
@@ -437,7 +438,7 @@ void ExportPanel::DrawAdvanced() {
         ImGui::SetTooltip("Marks the main object of the exported file. Applications use\n"
                           "it to know what to load. Recommended.");
     }
-    const bool isLayer = _format == 1;
+    const bool isLayer = _format == 0;
     if (!isLayer) ImGui::BeginDisabled();
     ImGui::Checkbox("Copy textures next to the file", &_relinkTextures);
     if (!isLayer) ImGui::EndDisabled();

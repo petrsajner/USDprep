@@ -8,7 +8,7 @@ usable on farms today.
 - Study & plan: `STUDY_AND_PLAN.md` · spike log: `M0_LOG.md`
 - Compatibility floor: Nuke 16.0 (USD 24.05 reader) · build pin: OpenUSD 25.x
 - Output profile: flattened, self-contained, UsdPreviewSurface-renderable,
-  packaged `.usdc`/`.usdz` with localized (UDIM) textures
+  `.usdc` + textures folder (what Nuke reads) or `.usdz` (other apps)
 
 ## Layout
 
@@ -68,7 +68,8 @@ is the shipped answer to "give me something I can drop into a comp";
 `--recipe my.json` reads your own (start it from a preset and override the
 two lines you care about). Flags you type win over the recipe.
 
-**Textures.** A `.usdz` output carries them inside the package. A
+**Textures.** A `.usdz` output carries them inside the package — but Nuke 17
+does not read textures from inside a package, so for Nuke export a `.usdc`. A
 `.usdc`/`.usda` output copies them into a `<name>_textures` folder next to
 the file and points the file at the copies, UDIM tile sets included —
 keep the two together, or pass `--no-relink` to leave the paths alone.

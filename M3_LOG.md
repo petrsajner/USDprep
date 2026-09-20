@@ -181,6 +181,44 @@ Advanced section. The `raw` preset (shown as "Original (nothing
 changed)") turns all of them off; the panel's switches override
 whatever preset is chosen, both ways.
 
+## Nuke 17 validation — the M3 exit (2026-09-20)
+
+Driven headless: `Nuke17.0.exe -t -i` (the interactive licence; `-t`
+alone asks for a render licence this machine does not have) with
+`tools/nuke/load_matrix.py` and `tools/nuke/render_matrix.py`. Eleven
+exports of ALab assets (original / nuke preset / trimmed / still / hero
+materials with a cap / decimated / the whole stoat), each opened
+through GeoImport and through Nuke's own USD 25.08, then rendered
+through ScanlineRender2 with a camera framed on the bounding box.
+
+**Every file opens without error in Nuke's USD 25.08**, frame ranges,
+defaultPrim and materials as written. Then the renders:
+
+| | .usdz | .usdc + textures folder |
+|---|---|---|
+| geometry | ✅ | ✅ |
+| textures | ❌ black — `Read error` for every texture inside the package | ✅ |
+| multi-tile `<UDIM>` sets | ❌ black | ❌ black — Nuke does not expand the template |
+| decimated (0.25 / 0.10) | — | ✅ looks right, textures intact |
+| trimmed animation, mid-frame | — | ✅ |
+| whole stoat, 261 meshes | — | ✅ 1.8 s for two frames |
+
+Two facts that change the product:
+
+1. **Nuke 17 does not read textures from inside a .usdz.** The
+   panel's recommended format is now the `.usdc` + `_textures` folder
+   ("what Nuke reads"); `.usdz` stays for other applications and the
+   report says so out loud when one is written.
+2. **Nuke 17 does not expand `<UDIM>`.** A single-tile set is now
+   rewritten to its tile (Nuke reads that); a multi-tile set is named
+   in the report as a material that will render black. The nuke
+   preset's preview materials use plain JPGs and are unaffected — one
+   more reason it is the default.
+
+Render times, two frames each: original jar 1.95 s, nuke preset 1.2 s,
+decimated to a tenth 0.5–0.7 s. Load itself is lazy in Nuke; the
+render is the honest number.
+
 ## What the environment does not have
 
 - **OpenImageIO** and **meshoptimizer** are not in the conda USD env.

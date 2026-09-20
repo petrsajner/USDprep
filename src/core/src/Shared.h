@@ -766,6 +766,43 @@ inline void CapTextures(Report& rep, const std::string& tmpPath, int maxSize) {
     }
 }
 
+// What Nuke 17 will and will not read, learned by rendering there: it
+// does not expand a "<UDIM>" template (the material renders black), and
+// it does not read textures from inside a .usdz package. A set with a
+// single tile is rewritten to that tile, which Nuke reads fine; the rest
+// is said out loud in the report so nobody hunts for a black material.
+inline void NukeReadability(Report& rep, const std::string& tmpPath, const std::string& outputPath) {
+    const SdfLayerRefPtr layer = SdfLayer::FindOrOpen(tmpPath);
+    if (!layer) return;
+    size_t collapsed = 0;
+    size_t multiTile = 0;
+    UsdUtilsModifyAssetPaths(layer, [&](const std::string& assetPath) -> std::string {
+        if (assetPath.empty() || !UsdShadeUdimUtils::IsUdimIdentifier(assetPath)) return assetPath;
+        const auto tiles = UsdShadeUdimUtils::ResolveUdimTilePaths(assetPath, layer);
+        if (tiles.size() == 1) {
+            ++collapsed;
+            return tiles.front().first;
+        }
+        if (tiles.size() > 1) ++multiTile;
+        return assetPath;
+    });
+    if (collapsed > 0) {
+        layer->Save();
+        rep.Info("textures", std::to_string(collapsed) +
+                                 " single-tile UDIM set(s) rewritten to the tile itself (Nuke does not "
+                                 "read UDIM templates)");
+    }
+    if (multiTile > 0) {
+        rep.Warn("nuke", std::to_string(multiTile) +
+                             " texture(s) are multi-tile UDIM sets, which Nuke 17 does not read - those "
+                             "materials render black there (the preview materials avoid this)");
+    }
+    if (HasExtension(outputPath, ".usdz")) {
+        rep.Warn("nuke", "Nuke 17 loads the geometry of a .usdz but not the textures inside it; "
+                         "export a .usdc with its textures folder for Nuke");
+    }
+}
+
 // Copy every external dependency (textures, including whole UDIM tile
 // sets) next to the output and rewrite the asset paths to point there —
 // the .usdc/.usda counterpart of what .usdz packaging does. Without this
@@ -857,6 +894,7 @@ inline void FinalizeOutput(Report& rep, const std::string& outputPath,
 
     DropMissingDependencies(rep, tmpPath);
     CapTextures(rep, tmpPath, maxTextureSize);
+    NukeReadability(rep, tmpPath, outputPath);
 
     if (HasExtension(outputPath, ".usdz")) {
         if (!UsdUtilsCreateNewUsdzPackage(SdfAssetPath(tmpPath), outputPath)) {
