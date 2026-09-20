@@ -278,9 +278,12 @@ void ExportPanel::DrawList(const std::vector<SdfPath>& selectionRoots) {
     // always answers "what goes out if I press Export now".
     const bool fromList = !_list.empty();
     const std::vector<SdfPath>& shown = fromList ? _list : selectionRoots;
+    // Sized by its content; only a list long enough to crowd out the
+    // tree gets a scrollbar instead of more height.
     const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
-    const float rows = std::min<float>(std::max<float>(static_cast<float>(shown.size()), 1.0f), 6.0f);
-    const float frameHeight = rowHeight * (rows + 1.0f) + style.WindowPadding.y * 2.0f;
+    const float rows = std::max<float>(static_cast<float>(shown.size()), 1.0f);
+    const float frameHeight = std::min(rowHeight * (rows + 1.0f) + style.WindowPadding.y * 2.0f,
+                                       ImGui::GetWindowHeight() * 0.45f);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, kListBackground);
     ImGui::BeginChild("export-list", ImVec2(0.0f, frameHeight),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -318,6 +321,12 @@ void ExportPanel::DrawList(const std::vector<SdfPath>& selectionRoots) {
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();
+
+    // Room under the frame: what goes out is one thing, how it goes out
+    // is another.
+    ImGui::Dummy(ImVec2(0.0f, rowHeight * 0.5f));
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0.0f, rowHeight * 0.3f));
 }
 
 // ---------------------------------------------------------------------------
