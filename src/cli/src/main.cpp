@@ -69,6 +69,8 @@ void PrintUsage() {
         << "  --keep-unused-materials keep materials nothing binds\n"
         << "  --keep-cards           keep the draw-mode card setup (six preview textures\n"
         << "                         per asset that Nuke never draws)\n"
+        << "  --keep-udim            leave UDIM tile sets as they are (Nuke renders those\n"
+        << "                         black); default: stitch each set into one texture\n"
         << "  --max-texture <px>     scale textures down to this many pixels on the\n"
         << "                         longer side, in the output only (0 = no cap)\n"
         << "  --simplify <ratio>     decimate meshes to this share of their triangles,\n"
@@ -130,6 +132,7 @@ struct CommonOptions {
     bool keepRenderContexts = false;
     bool keepUnusedMaterials = false;
     bool keepCards = false;
+    bool keepUdim = false;
     int maxTextureSize = -1;  // -1 = the recipe decides
     double simplifyRatio = -1.0;  // -1 = the recipe decides
     std::string animation;  // empty = the recipe decides
@@ -173,6 +176,7 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (common.keepRenderContexts) options->stripRenderContexts = false;
     if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
     if (common.keepCards) options->stripDrawModeCards = false;
+    if (common.keepUdim) options->udimAtlas = false;
     if (common.maxTextureSize >= 0) options->maxTextureSize = common.maxTextureSize;
     if (common.simplifyRatio >= 0.0) options->simplifyRatio = common.simplifyRatio;
     if (!common.animation.empty()) options->animation = common.animation;
@@ -232,6 +236,8 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             common.keepUnusedMaterials = true;
         } else if (a == "--keep-cards") {
             common.keepCards = true;
+        } else if (a == "--keep-udim") {
+            common.keepUdim = true;
         } else if (a == "--max-texture") {
             if (++i >= args.size()) { error = "--max-texture needs a pixel count"; return -1; }
             common.maxTextureSize = static_cast<int>(std::strtol(args[i].c_str(), nullptr, 10));

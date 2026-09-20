@@ -61,6 +61,7 @@ int main() {
         usdprep::ExtractOptions options;
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "capped.usdc").string();
+        options.udimAtlas = false;
         options.maxTextureSize = 64;
         const usdprep::Report rep = usdprep::ExtractPrims(scene, options);
         CHECK(rep.ok);
@@ -110,6 +111,7 @@ int main() {
         usdprep::ExtractOptions options;
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "capped.usdz").string();
+        options.udimAtlas = false;
         options.maxTextureSize = 64;
         CHECK(usdprep::ExtractPrims(scene, options).ok);
         std::error_code ec;
@@ -140,6 +142,7 @@ int main() {
         usdprep::ExtractOptions options;
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "warned.usdz").string();
+        options.udimAtlas = false;
         const usdprep::Report rep = usdprep::ExtractPrims(scene, options);
         CHECK(rep.ok);
         int nukeWarnings = 0;

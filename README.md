@@ -70,10 +70,11 @@ two lines you care about). Flags you type win over the recipe.
 
 **Only what Nuke reads.** The tool offers nothing Nuke cannot load. The
 output is a `.usdc` (or `.usda`); a `.usdz` is refused, because Nuke 17
-loads a package's geometry and none of its textures. Where a full-quality
-material sits on a multi-tile UDIM set — Nuke does not expand `<UDIM>` and
-renders it black — the object gets its light material instead and the
-report says so. Other applications are served by stock usdtweak or by
+loads a package's geometry and none of its textures. Nuke does not expand
+`<UDIM>` either and renders such a material black - so every multi-tile
+UDIM set is stitched into one atlas texture, with a `UsdTransform2d` in
+the material squeezing the UVs into it (meshes untouched; the texture cap
+applies per tile; `--keep-udim` leaves the sets alone). Other applications are served by stock usdtweak or by
 building on `usdprep-core`, which still packages.
 
 **Textures.** They are copied into a `<name>_textures` folder next to the

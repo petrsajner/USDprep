@@ -62,6 +62,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         extractOptions.stripRenderContexts = options.stripRenderContexts;
         extractOptions.stripUnusedMaterials = options.stripUnusedMaterials;
         extractOptions.stripDrawModeCards = options.stripDrawModeCards;
+        extractOptions.udimAtlas = options.udimAtlas;
         extractOptions.maxTextureSize = options.maxTextureSize;
         extractOptions.simplifyRatio = options.simplifyRatio;
         extractOptions.animation = options.animation;
@@ -146,7 +147,11 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
     }
     DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
     StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
-                   options.stripUnusedMaterials);
+                   options.stripUnusedMaterials, options.udimAtlas);
+    if (options.udimAtlas) {
+        AtlasUdimTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
+                          options.maxTextureSize);
+    }
     if (options.stripDrawModeCards) StripDrawModeCards(rep, flat);
     TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
                   options.staticFrame);

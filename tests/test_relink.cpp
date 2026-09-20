@@ -56,6 +56,7 @@ int main() {
     // --- default: textures are copied next to the output and repointed ---
     {
         usdprep::ExtractOptions options;
+        options.udimAtlas = false;  // the set-stays-a-set path; the atlas has its own test
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "panel.usdc").string();
         const usdprep::Report rep = usdprep::ExtractPrims(scene, options);
@@ -97,6 +98,7 @@ int main() {
     // --- opt out: paths stay as they were, no sidecar folder ---
     {
         usdprep::ExtractOptions options;
+        options.udimAtlas = false;  // the set-stays-a-set path; the atlas has its own test
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "panel_raw.usdc").string();
         options.relinkTextures = false;
@@ -111,6 +113,7 @@ int main() {
     // --- a scene without textures gets no sidecar folder at all ---
     {
         usdprep::ExtractOptions options;
+        options.udimAtlas = false;  // the set-stays-a-set path; the atlas has its own test
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "plain.usdc").string();
         const usdprep::Report rep =
@@ -125,6 +128,7 @@ int main() {
         const std::string partial = FIXTURE_DIR "/missing_textures.usda";
         for (const char* ext : {".usdz", ".usdc"}) {
             usdprep::ExtractOptions options;
+            options.udimAtlas = false;  // the set-stays-a-set path; the atlas has its own test
             options.primPaths = {"/Root"};
             options.outputPath = (outDir / (std::string("partial") + ext)).string();
             const usdprep::Report rep = usdprep::ExtractPrims(partial, options);
@@ -152,6 +156,7 @@ int main() {
     // --- usdz still packages everything inside the archive ---
     {
         usdprep::ExtractOptions options;
+        options.udimAtlas = false;  // the set-stays-a-set path; the atlas has its own test
         options.primPaths = {"/Root"};
         options.outputPath = (outDir / "panel.usdz").string();
         const usdprep::Report rep = usdprep::ExtractPrims(scene, options);

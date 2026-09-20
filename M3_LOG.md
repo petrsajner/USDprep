@@ -234,10 +234,39 @@ application uses stock usdtweak or builds on the core. So:
   and the report says so (`nuke` warning). With no light material to
   fall back to, the black-material warning stays. Fixture
   `udim_hero_scene.usda`.
-- Still open: "Original"/`--materials all` leaves both bindings, UDIM
-  included, because the original must stay exportable. The real fix for
-  hero looks in Nuke is stitching a UDIM set into one atlas texture and
-  remapping the UVs — a candidate for later.
+- Superseded for the usual case by the UDIM atlas below; the fallback
+  only acts when the atlas is switched off.
+
+## UDIM atlas
+
+Nuke 17 does not expand `<UDIM>`, but it does honour `UsdTransform2d`
+(probe: `tools/nuke/make_transform2d_probe.py`, rendered red|green at
+the middle of the quad with the node, at a quarter without). So the fix
+stays inside the material (`src/core/src/UdimAtlas.cpp`):
+
+- every multi-tile set a `UsdUVTexture` reads is stitched into one image
+  laid out like the UV space it covers (`name.atlas.ext`, missing cells
+  black, same pixel format as the tiles);
+- a `UsdTransform2d` goes between the texture and whatever fed its `st`
+  (a primvar reader is added when nothing did):
+  `scale = 1/(columns, rows)`, `translation = -(minColumn, minRow)/(columns, rows)`;
+- meshes and their UVs are not touched, so shared UV sets, subsets and
+  animated UVs are no concern.
+
+The texture cap applies per tile (a 4K cap on a 2x1 set gives an
+8192x4096 atlas), and an atlas never exceeds 16384 px. The tiles
+themselves are no longer shipped. Switch: `udimAtlas` in the recipe
+(nuke: on, raw: off), `--keep-udim` on the CLI; the panel has no
+checkbox for it - only "Original" leaves a set alone.
+
+Checked in Nuke 17: the fixture (`udim_atlas_scene.usda`, tiles 1002,
+1003, 1012) lands every colour where its tile was, and ALab's outfit
+with `--materials full` (6 sets x 2 EXR tiles) renders textured where it
+was black before. Export 1.6 s.
+
+Limits: only `UsdUVTexture` is rewired (a renderer-specific image node
+on a UDIM set stays and is warned about); tiles of one set must share a
+pixel format; Nuke 16 has not been checked for `UsdTransform2d` yet.
 
 ## What the environment does not have
 

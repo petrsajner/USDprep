@@ -26,6 +26,9 @@ struct PruneOptions {
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
     bool stripDrawModeCards = true;
+    // Nuke does not read UDIM tile sets: stitch each multi-tile set into one
+    // texture and squeeze the UVs into it inside the material.
+    bool udimAtlas = true;
     int maxTextureSize = 0;
     double simplifyRatio = 0.0;
     // Animation, as in ExtractOptions.

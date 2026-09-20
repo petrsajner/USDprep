@@ -27,6 +27,9 @@ struct Recipe {
     bool stripRenderContexts = true;
     bool stripUnusedMaterials = true;
     bool stripDrawModeCards = true;
+    // Nuke does not read UDIM tile sets: stitch each multi-tile set into one
+    // texture and squeeze the UVs into it inside the material.
+    bool udimAtlas = true;
     // Textures above this many pixels on the longer side are scaled down
     // in the output; 0 leaves them alone.
     int maxTextureSize = 0;

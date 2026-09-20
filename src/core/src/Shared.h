@@ -37,6 +37,7 @@
 #include <pxr/imaging/hio/types.h>
 #include <pxr/usd/usdShade/material.h>
 #include <pxr/usd/usdShade/materialBindingAPI.h>
+#include <pxr/usd/usdShade/shader.h>
 #include <pxr/usd/usdShade/tokens.h>
 #include <pxr/usd/usdShade/udimUtils.h>
 #include <pxr/usd/usdUtils/coalescingDiagnosticDelegate.h>
@@ -265,7 +266,7 @@ inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
 // Textures only the removed shaders referenced disappear with them, which
 // is where the weight goes.
 inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::string& purpose,
-                           bool stripRenderContexts, bool stripUnused) {
+                           bool stripRenderContexts, bool stripUnused, bool udimAtlas) {
     const bool choose = purpose == "preview" || purpose == "full";
     if (!choose && !stripRenderContexts && !stripUnused) return;
     const auto shown = UsdTraverseInstanceProxies(UsdPrimDefaultPredicate);
@@ -282,6 +283,9 @@ inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::s
                 if (attr.GetTypeName() != SdfValueTypeNames->Asset) continue;
                 SdfAssetPath asset;
                 if (!attr.Get(&asset) || !UsdShadeUdimUtils::IsUdimIdentifier(asset.GetAssetPath())) continue;
+                // a set a UsdUVTexture reads is about to become an atlas
+                TfToken id;
+                if (udimAtlas && UsdShadeShader(node).GetShaderId(&id) && id == "UsdUVTexture") continue;
                 if (UsdShadeUdimUtils::ResolveUdimTilePaths(asset.GetAssetPath(), flat->GetRootLayer()).size() > 1) {
                     result = true;
                 }
@@ -472,6 +476,22 @@ inline void StripDrawModeCards(Report& rep, const UsdStageRefPtr& flat) {
                               " object(s); " + std::to_string(textures) +
                               " card texture(s) no longer needed");
     }
+}
+
+// UdimAtlas.cpp: stitch every multi-tile UDIM set a UsdUVTexture reads
+// into one image under `atlasDir` and put a UsdTransform2d in front of
+// the texture. `maxTileSize` caps each tile (0 = as it is).
+void AtlasUdimTextures(Report& rep, const UsdStageRefPtr& flat, const std::string& atlasDir,
+                       int maxTileSize);
+
+// Where the atlases go: the scratch folder when the textures get copied
+// next to the output anyway, else straight into "<name>_textures".
+inline std::string AtlasDirFor(const std::string& outputPath, const std::string& tmpPath,
+                               bool relinkTextures) {
+    namespace fs = std::filesystem;
+    if (relinkTextures) return (fs::path(tmpPath).parent_path() / "textures" / "atlas").string();
+    const fs::path out(outputPath);
+    return (out.parent_path() / (out.stem().string() + "_textures")).string();
 }
 
 // Simplify.cpp: decimate every mesh with at least `minFaces` faces to
@@ -672,6 +692,8 @@ inline void CapTextures(Report& rep, const std::string& tmpPath, int maxSize) {
         const auto known = copies.find(source);
         if (known != copies.end()) return known->second;
         copies[source] = "";
+        // an atlas was capped tile by tile when it was built
+        if (fs::path(source).filename().string().find(".atlas.") != std::string::npos) return "";
         const HioImageSharedPtr image = HioImage::OpenForReading(
             source, 0, 0, HioImage::SourceColorSpace::Raw, /*suppressErrors=*/true);
         if (!image) {

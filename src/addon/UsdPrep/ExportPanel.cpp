@@ -448,8 +448,8 @@ void ExportPanel::DrawAdvanced() {
         ImGui::SetTooltip("Production assets often carry two materials per object: a heavy\n"
                           "one for final renders (4K UDIM textures) and a light one for\n"
                           "previews. Nuke is happy with the light one, and it is a fraction\n"
-                          "of the size. Where the heavy one uses UDIM tile sets, which Nuke\n"
-                          "cannot read, the object gets its light one - the report says so.");
+                          "of the size. UDIM tile sets, which Nuke cannot read, are stitched\n"
+                          "into one texture each.");
     }
 
     ImGui::AlignTextToFramePadding();
@@ -557,6 +557,9 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     options.stripRenderContexts = _stripRenderContexts;
     options.stripUnusedMaterials = _stripUnusedMaterials;
     options.stripDrawModeCards = _stripCards;
+    // Not a switch in the panel: a UDIM set is something Nuke cannot read,
+    // so only the "Original" recipe (nothing changed) leaves one alone.
+    options.udimAtlas = _recipe.udimAtlas;
     options.outputPath = _outputPath;
     for (const SdfPath& p : targets) options.primPaths.push_back(p.GetAsString());
 

@@ -33,7 +33,7 @@ def frame_camera(path):
     return c, size, stage.GetStartTimeCode(), stage.GetEndTimeCode()
 
 results = []
-for path in sorted(glob.glob(os.path.join(MATRIX, "*.usd[zc]"))):
+for path in sorted(glob.glob(os.path.join(MATRIX, "*.usd[zca]"))):
     name = os.path.splitext(os.path.basename(path))[0]
     r = {"file": name}
     try:

@@ -32,6 +32,9 @@ struct ExtractOptions {
     bool stripUnusedMaterials = true;
     // Draw-mode cards (a viewer's stand-in box with six textures) go too.
     bool stripDrawModeCards = true;
+    // Nuke does not read UDIM tile sets: stitch each multi-tile set into one
+    // texture and squeeze the UVs into it inside the material.
+    bool udimAtlas = true;
     // Textures larger than this on their longer side are scaled down in
     // the output (0 = leave them alone). The originals are never touched.
     int maxTextureSize = 0;

@@ -30,6 +30,7 @@ const Recipe& NukePreset() {
         r.stripRenderContexts = true;
         r.stripUnusedMaterials = true;
         r.stripDrawModeCards = true;
+        r.udimAtlas = true;
         r.maxTextureSize = 4096;
         r.animation = "range";
         return r;
@@ -51,6 +52,7 @@ const Recipe& RawPreset() {
         r.stripRenderContexts = false;
         r.stripUnusedMaterials = false;
         r.stripDrawModeCards = false;
+        r.udimAtlas = false;
         r.maxTextureSize = 0;
         r.animation = "all";
         return r;
@@ -201,6 +203,8 @@ bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
             ok = ReadBool(value, &loaded.stripUnusedMaterials, key, error);
         } else if (key == "stripDrawModeCards") {
             ok = ReadBool(value, &loaded.stripDrawModeCards, key, error);
+        } else if (key == "udimAtlas") {
+            ok = ReadBool(value, &loaded.udimAtlas, key, error);
         } else if (key == "maxTextureSize") {
             if (!value.IsInt() || value.GetInt() < 0) {
                 *error = "'maxTextureSize' must be a whole number of pixels (0 = no cap)";
@@ -255,6 +259,7 @@ std::string RecipeToJson(const Recipe& recipe) {
     os << "  \"stripRenderContexts\": " << (recipe.stripRenderContexts ? "true" : "false") << ",\n";
     os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << ",\n";
     os << "  \"stripDrawModeCards\": " << (recipe.stripDrawModeCards ? "true" : "false") << ",\n";
+    os << "  \"udimAtlas\": " << (recipe.udimAtlas ? "true" : "false") << ",\n";
     os << "  \"maxTextureSize\": " << recipe.maxTextureSize << ",\n";
     os << "  \"simplifyRatio\": " << recipe.simplifyRatio << ",\n";
     os << "  \"animation\": \"" << JsonEscape(recipe.animation) << "\"";
@@ -276,6 +281,7 @@ void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
     options->stripDrawModeCards = recipe.stripDrawModeCards;
+    options->udimAtlas = recipe.udimAtlas;
     options->maxTextureSize = recipe.maxTextureSize;
     options->simplifyRatio = recipe.simplifyRatio;
     options->animation = recipe.animation;
@@ -294,6 +300,7 @@ void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
     options->stripRenderContexts = recipe.stripRenderContexts;
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
     options->stripDrawModeCards = recipe.stripDrawModeCards;
+    options->udimAtlas = recipe.udimAtlas;
     options->maxTextureSize = recipe.maxTextureSize;
     options->simplifyRatio = recipe.simplifyRatio;
     options->animation = recipe.animation;

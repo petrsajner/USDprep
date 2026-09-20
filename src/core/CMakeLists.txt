@@ -9,6 +9,7 @@ add_library(usdprep-core
     src/Report.cpp
     src/Select.cpp
     src/Simplify.cpp
+    src/UdimAtlas.cpp
     src/StageInfo.cpp
 )
 add_library(usdprep::core ALIAS usdprep-core)

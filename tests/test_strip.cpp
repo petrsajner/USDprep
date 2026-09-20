@@ -68,13 +68,14 @@ bool Has(const std::vector<std::string>& values, const std::string& value) {
 }
 
 usdprep::Report Export(const std::string& scene, const fs::path& outPath, const std::string& purpose,
-                       bool contexts, bool unused) {
+                       bool contexts, bool unused, bool udimAtlas = true) {
     usdprep::ExtractOptions options;
     options.primPaths = {"/Root"};
     options.outputPath = outPath.string();
     options.materialPurpose = purpose;
     options.stripRenderContexts = contexts;
     options.stripUnusedMaterials = unused;
+    options.udimAtlas = udimAtlas;
     return usdprep::ExtractPrims(scene, options);
 }
 
@@ -178,11 +179,12 @@ int main() {
         CHECK(Inspect((outDir / "cards_kept.usdc").string()).textures.size() == 6);
     }
 
-    // --- only what Nuke reads: a hero material on a multi-tile UDIM set
-    //     gives way to the light one; an ordinary hero material stays ---
+    // --- only what Nuke reads, with the atlas switched off: a hero material
+    //     on a multi-tile UDIM set gives way to the light one; an ordinary
+    //     hero material stays ---
     {
         const usdprep::Report rep =
-            Export(FIXTURE_DIR "/udim_hero_scene.usda", outDir / "udim_hero.usdc", "full", true, true);
+            Export(FIXTURE_DIR "/udim_hero_scene.usda", outDir / "udim_hero.usdc", "full", true, true, /*udimAtlas=*/false);
         CHECK(rep.ok);
         const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open((outDir / "udim_hero.usdc").string());
         const auto boundTo = [&](const char* prim) {
