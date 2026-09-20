@@ -1,0 +1,24 @@
+USD Prep for Nuke
+
+Turns heavy production USD scenes into light assets that Nuke reads:
+pick an object in the 3D view or the scene tree, press Export.
+
+What this computer needs
+
+  - Windows 10 or 11, 64-bit
+  - A graphics card with a current driver from its vendor (NVIDIA, AMD or
+    Intel) that provides OpenGL 4.5. Any computer that runs Nuke 16 or 17
+    qualifies. Without it the 3D view stays empty; the usdcut command line
+    tool works regardless.
+  - About 250 MB of disk space
+
+What this installer does
+
+  - Installs for the current user only. No administrator rights, no
+    internet connection, nothing outside the chosen folder except the
+    Start menu shortcut (and, if you tick it, an entry in your own PATH).
+  - Everything the program needs is inside its folder. It does not touch
+    Nuke, Python or any other USD installation on this computer.
+
+Exports are .usdc files with a textures folder next to them - the form
+Nuke 16 and 17 were measured to read, textures included.

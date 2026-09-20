@@ -16,3 +16,4 @@ imgui.ini
 
 # scratch folder of an interrupted run (removed on success)
 .usdprep-tmp-*/
+dist/
