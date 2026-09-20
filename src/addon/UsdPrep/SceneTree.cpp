@@ -1,5 +1,7 @@
 #include "SceneTree.h"
 
+#include "SceneOverview.h"
+
 #include <algorithm>
 #include <cctype>
 
@@ -255,7 +257,7 @@ void SceneTree::HandleGlobalKeys(const UsdStageRefPtr& stage) {
     if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
         usdtweak::FrameCameraOnSelection();
     } else if (!ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) {
-        usdtweak::FrameCameraOnScene();  // the way back from anywhere
+        FrameOverview(stage);  // the way back from anywhere
     }
 }
 

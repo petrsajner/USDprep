@@ -194,6 +194,47 @@ inline bool AuthorDefaultPrim(const UsdStageRefPtr& flatStage, const SdfPath& ro
 // from an already flattened stage. The categories are independent
 // requests, so they are resolved one at a time and unioned: one Select
 // with both filters set would mean "lights that are also guides".
+// When instancing is kept, everything instanced lives in the prototypes of
+// the flattened layer: top-level "over" prims named Flattened_Prototype_N
+// that the instances reference. A stage traversal does not visit an over,
+// and an instance proxy cannot be edited - so no clean-up would ever reach
+// instanced content (measured on ALab: the export came out larger than the
+// de-instanced one, hero textures, proxies and lights all still in it).
+// For the time of the post-pass the prototypes are turned into ordinary
+// defined prims: every pass then treats them like any other subtree, once
+// per prototype instead of once per instance. Restore() turns them back.
+class ExposedPrototypes {
+public:
+    explicit ExposedPrototypes(const UsdStageRefPtr& flat) : _layer(flat->GetRootLayer()) {
+        for (const SdfPrimSpecHandle& spec : _layer->GetRootPrims()) {
+            if (spec->GetSpecifier() == SdfSpecifierOver && IsPrototypeName(spec->GetName())) {
+                spec->SetSpecifier(SdfSpecifierDef);
+                _paths.push_back(spec->GetPath());
+            }
+        }
+    }
+    ~ExposedPrototypes() { Restore(); }
+    void Restore() {
+        for (const SdfPath& path : _paths) {
+            if (const SdfPrimSpecHandle spec = _layer->GetPrimAtPath(path)) spec->SetSpecifier(SdfSpecifierOver);
+        }
+        _paths.clear();
+    }
+    size_t Count() const { return _paths.size(); }
+    static bool IsPrototypeName(const std::string& name) { return name.rfind("Flattened_Prototype", 0) == 0; }
+    // True while some prototype of this stage is exposed.
+    static bool ActiveOn(const UsdStageRefPtr& flat) {
+        for (const UsdPrim& prim : flat->GetPseudoRoot().GetChildren()) {
+            if (IsPrototypeName(prim.GetName().GetString())) return true;  // GetChildren() lists defined prims only
+        }
+        return false;
+    }
+
+private:
+    SdfLayerHandle _layer;
+    std::vector<SdfPath> _paths;
+};
+
 inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
                                     const std::vector<std::string>& types,
                                     const std::vector<std::string>& purposes) {
@@ -246,7 +287,8 @@ inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
         rep.Info("strip", std::to_string(removed) +
                               " subtree(s) removed by the type/purpose filter");
     }
-    if (insideInstances > 0) {
+    // with the prototypes exposed the same prims were matched, and removed, there
+    if (insideInstances > 0 && !ExposedPrototypes::ActiveOn(flat)) {
         rep.Warn("strip", std::to_string(insideInstances) +
                               " match(es) live inside instanced content and were kept "
                               "— deleting them requires de-instancing");

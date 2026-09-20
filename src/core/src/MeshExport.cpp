@@ -215,7 +215,8 @@ bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& 
     std::vector<Item> items;
     std::vector<AbcMesh> meshes;
     bool animated = false;
-    for (const UsdPrim& prim : stage->Traverse()) {
+    // instanced content is geometry like any other here: the files have no instancing to keep
+    for (const UsdPrim& prim : UsdPrimRange(stage->GetPseudoRoot(), UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
         if (!prim.IsA<UsdGeomMesh>()) continue;
         if (UsdGeomImageable(prim).ComputeVisibility(UsdTimeCode(first)) == UsdGeomTokens->invisible) continue;
         VtVec3fArray points;

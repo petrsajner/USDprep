@@ -129,6 +129,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         rep.Fail("cannot reopen flattened layer: " + tmpPath);
         return;
     }
+    ExposedPrototypes prototypes(flat);  // kept instancing: the passes below reach into it
     for (const SdfPath& p : roots) {
         const UsdPrim prim = flat->GetPrimAtPath(p);
         if (prim && prim.IsInstanceProxy()) {
@@ -184,6 +185,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
             rep.Warn("defaultPrim", "output has no prim to point at — none authored");
         }
     }
+    prototypes.Restore();
     flat->Save();
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,

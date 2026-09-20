@@ -188,6 +188,8 @@ void ConvertToYUp(Report& rep, const UsdStageRefPtr& flat) {
     if (UsdGeomGetStageUpAxis(flat) != UsdGeomTokens->z) return;
     std::vector<std::string> rotated;
     for (UsdPrim prim : flat->GetPseudoRoot().GetChildren()) {
+        // an exposed prototype is not part of the scene: its instances get the rotation from their own roots
+        if (ExposedPrototypes::IsPrototypeName(prim.GetName().GetString())) continue;
         if (!prim.IsA<UsdGeomXformable>()) {
             // a Scope or an untyped group cannot carry a transform; an Xform is the same thing that can
             if (!prim.GetTypeName().IsEmpty() && prim.GetTypeName() != "Scope") continue;

@@ -155,8 +155,8 @@ int main() {
         CHECK(rep.after.cameras == 1);  // the shot camera is not a light
     }
 
-    // --- matches inside instanced content are kept when instancing is,
-    //     because a prototype is shared and cannot be edited per instance ---
+    // --- kept instancing: the filter reaches into the prototypes, once per
+    //     prototype, and the instances stay instances ---
     {
         usdprep::PruneOptions options;
         options.dropTypes = {"Mesh"};
@@ -164,15 +164,11 @@ int main() {
         options.outputPath = outDir + "/prune_instanced.usdc";
         const usdprep::Report rep = usdprep::PruneStage(scene, options);
         CHECK(rep.ok);
-        CHECK(rep.after.meshes == 1);  // BoltGeo survives inside the instance
-        bool warned = false;
+        CHECK(rep.after.meshes == 0);     // BoltGeo inside the instance went too
+        CHECK(rep.after.instances == 1);  // and the instance is still one
         for (const usdprep::ReportEntry& entry : rep.entries) {
-            if (entry.severity == usdprep::ReportEntry::Severity::Warning &&
-                entry.detail.find("instanced content") != std::string::npos) {
-                warned = true;
-            }
+            CHECK(entry.detail.find("instanced content") == std::string::npos);
         }
-        CHECK(warned);
     }
 
     // --- a filter that matches nothing is a warning, not a failure ---

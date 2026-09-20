@@ -24,6 +24,7 @@
 
 #include "ExportPanel.h"
 #include "OutputPath.h"
+#include "SceneOverview.h"
 #include "SceneTree.h"
 
 namespace {
@@ -165,8 +166,11 @@ void DrawPrepPanel() {
     if (ImGui::Button("Frame selection (F)")) usdtweak::FrameCameraOnSelection();
     if (roots.empty()) ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Whole scene (A)")) usdtweak::FrameCameraOnScene();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lost? This brings the whole scene back into view.");
+    if (ImGui::Button("Whole scene (A)")) FrameOverview(stage);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Lost? This brings back the view of where the objects are\n"
+                          "(a backdrop or a garden around them does not count).");
+    }
     ImGui::SameLine();
     ImGui::TextDisabled("How to move (?)");
     if (ImGui::IsItemHovered()) {

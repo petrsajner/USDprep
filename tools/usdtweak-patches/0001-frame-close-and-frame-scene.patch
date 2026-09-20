@@ -1,8 +1,8 @@
 diff --git a/src/addons/Api.cpp b/src/addons/Api.cpp
-index 98dfc68..b521728 100644
+index 98dfc68..65c26b9 100644
 --- a/src/addons/Api.cpp
 +++ b/src/addons/Api.cpp
-@@ -73,6 +73,10 @@ void FrameCameraOnSelection() {
+@@ -73,6 +73,14 @@ void FrameCameraOnSelection() {
      if (gEditor) gEditor->GetViewport().FrameCameraOnSelection(gEditor->GetSelection());
  }
  
@@ -10,19 +10,34 @@ index 98dfc68..b521728 100644
 +    if (gEditor) gEditor->GetViewport().FrameCameraOnRootPrim();
 +}
 +
++void FrameCameraOnBox(const GfRange3d &box, double cutaway) {
++    if (gEditor) gEditor->GetViewport().FrameCameraOnBox(box, cutaway);
++}
++
  // ----------------------------------------------------------- search service
  std::vector<SdfPath> SearchPrimsByName(const std::string &needle, uint32_t limit) {
      const uint32_t mask = static_cast<uint32_t>(SearchCategory::PrimName) |
 diff --git a/src/addons/Api.h b/src/addons/Api.h
-index f3ed2fc..7e893ae 100644
+index f3ed2fc..cdb7c14 100644
 --- a/src/addons/Api.h
 +++ b/src/addons/Api.h
-@@ -72,6 +72,8 @@ void FindOrOpenLayer(const std::string &path);
+@@ -21,6 +21,7 @@
+ ///   }
+ ///
+ 
++#include <pxr/base/gf/range3d.h>
+ #include <pxr/base/tf/registryManager.h>
+ #include <pxr/usd/sdf/layer.h>
+ #include <pxr/usd/sdf/path.h>
+@@ -72,6 +73,11 @@ void FindOrOpenLayer(const std::string &path);
  void CreateStage(const std::string &path);
  
  void FrameCameraOnSelection();
 +// Frame the whole scene (the default prim, else everything): the way back from anywhere.
 +void FrameCameraOnScene();
++// Frame a world-space box; what stands between the camera and the box is cut away.
++// `cutaway` < 1 cuts into the box itself: a room seen from outside its walls opens up.
++void FrameCameraOnBox(const GfRange3d &box, double cutaway = 1.0);
  
  // ----------------------------------------------------------- search service
  /// Substring search over indexed prim paths. Returns at most `limit` matches.
@@ -61,10 +76,10 @@ index 6794de8..355dc35 100644
          _stageCamera = UsdGeomCamera::Get(viewport.GetCurrentStage(), viewport.GetSelectedStageCameraPath());
          BeginEdition(viewport.GetCurrentStage());
 diff --git a/src/viewport/Viewport.cpp b/src/viewport/Viewport.cpp
-index 421882c..dfbe32b 100644
+index 421882c..13caf85 100644
 --- a/src/viewport/Viewport.cpp
 +++ b/src/viewport/Viewport.cpp
-@@ -333,11 +333,17 @@ void Viewport::FrameCameraOnSelection(const Selection &selection) { // Camera ma
+@@ -333,11 +333,24 @@ void Viewport::FrameCameraOnSelection(const Selection &selection) { // Camera ma
          }
          auto defaultPrim = GetCurrentStage()->GetDefaultPrim();
          FrameCameraManipulatorsOnBBox(GetEditableCamera(), bbox);
@@ -76,13 +91,20 @@ index 421882c..dfbe32b 100644
      }
  }
  
++void Viewport::FrameCameraOnBox(const GfRange3d &box, double cutaway) {
++    if (box.IsEmpty()) return;
++    FrameCameraManipulatorsOnBBox(GetEditableCamera(), GfBBox3d(box));
++    _framedCenter = box.GetMidpoint();
++    _framedRadius = 0.5 * box.GetSize().GetLength() * cutaway;
++}
++
  /// Frame the viewport using the bounding box of the root prim
  void Viewport::FrameCameraOnRootPrim() {
 +    ClearFramedSelection();
      if (GetCurrentStage()) {
          UsdGeomBBoxCache bboxcache(_imagingSettings.frame, UsdGeomImageable::GetOrderedPurposeTokens());
          auto defaultPrim = GetCurrentStage()->GetDefaultPrim();
-@@ -521,6 +527,15 @@ GfCamera Viewport::GetViewportCamera(double width, double height) const {
+@@ -521,6 +534,15 @@ GfCamera Viewport::GetViewportCamera(double width, double height) const {
      if (viewportCamera.GetProjection() == GfCamera::Perspective) {
          viewportCamera.SetPerspectiveFromAspectRatioAndFieldOfView(
              width / height, viewportCamera.GetFieldOfView(GfCamera::FOVHorizontal), GfCamera::FOVHorizontal);
@@ -99,10 +121,21 @@ index 421882c..dfbe32b 100644
          viewportCamera.SetOrthographicFromAspectRatioAndSize(
              width / height, viewportCamera.GetHorizontalAperture() * GfCamera::APERTURE_UNIT, GfCamera::FOVHorizontal);
 diff --git a/src/viewport/Viewport.h b/src/viewport/Viewport.h
-index afba7e4..557adc0 100644
+index afba7e4..3f93bd0 100644
 --- a/src/viewport/Viewport.h
 +++ b/src/viewport/Viewport.h
-@@ -137,9 +137,18 @@ class Viewport final {
+@@ -50,6 +50,10 @@ class Viewport final {
+     /// Camera framing
+     void FrameCameraOnSelection(const Selection &);
+     void FrameCameraOnRootPrim();
++    /// Frame a world-space box and cut away what stands in front of it, as for a selection.
++    /// `cutaway` is how much of the box's bounding sphere stays in front of the cut: 1 keeps
++    /// all of it, less opens the box itself up (a room seen from outside its walls).
++    void FrameCameraOnBox(const GfRange3d &box, double cutaway = 1.0);
+     void FrameAllCameras();
+ 
+     /// Viewport size
+@@ -137,9 +141,18 @@ class Viewport final {
      void HandleManipulationEvents();
      void HandleKeyboardShortcut();
  

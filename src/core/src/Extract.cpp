@@ -81,6 +81,7 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
             rep.Fail("cannot reopen the flattened layer: " + tmpPath);
             return;
         }
+        ExposedPrototypes prototypes(flat);  // kept instancing: the passes below reach into it
         DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
         StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
                        options.stripUnusedMaterials, options.udimAtlas);
@@ -97,6 +98,7 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
             rep.Info("defaultPrim",
                      "set to top-level ancestor of " + roots.front().GetAsString());
         }
+        prototypes.Restore();
         flat->Save();
     }
 

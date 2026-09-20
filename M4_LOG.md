@@ -111,3 +111,41 @@ The core finds it in `third_party/alembic-install` (optional: without it
 everything else builds and an `.abc` output fails with a clear message).
 The bundle grew by `Imath.dll` - 98 binaries, 80 MB, installer 20 MB;
 `.abc` export was run from the bundle in a clean environment.
+
+## Slice 4: de-instancing, measured; "Whole scene" that finds the scene
+
+**De-instancing.** The assumption was "de-instancing is the size trap,
+keep instancing by default". Measured on ALab's whole set (1431
+instances of 387 prototypes, nuke preset, one frame):
+
+| | file | textures | export |
+|---|---|---|---|
+| de-instanced | 174 MB | 120 MB | 17.5 s |
+| instancing kept, before | 272 MB | **6.1 GB** | 90 s |
+| instancing kept, now | 174 MB | 120 MB | 13.6 s |
+
+- Kept instancing was the trap: nothing reached inside the instances -
+  a traversal does not visit the prototypes (`over` prims in the
+  flattened layer) and an instance proxy cannot be edited. Proxies, hero
+  materials with their UDIM sets and lights all stayed.
+- Fix (`ExposedPrototypes`, `Shared.h`): for the time of the post-pass
+  the `Flattened_Prototype_N` prims are made ordinary defined prims, so
+  every pass handles them like any other subtree - once per prototype -
+  and they are turned back before saving. The Y-up conversion skips
+  them; the .obj/.abc export walks instance proxies.
+- The file is no smaller with instancing kept: `.usdc` stores identical
+  arrays once, so de-instanced copies cost nothing on disk. What
+  instancing can save is Nuke's memory and time (6.2 M points instead of
+  12.7 M in this set) - **not measured yet**: Nuke's licence was not
+  available for that run (an earlier attempt gave a JPEG read error on a
+  different texture in 16.1 and in 17.0, which needs a second look).
+  Until then the default stays de-instanced, the verified path.
+
+**"Whole scene (A)"** framed the bounding box of everything - in ALab
+that is the house and its garden, with the lab a detail inside. It now
+frames *where the objects are*: the centres of the scene's components,
+the middle 80 % on each axis, grown by a typical object's size
+(`SceneOverview.h`, worked out once per scene), and cuts into that box
+(`FrameCameraOnBox(box, cutaway)` in the usdtweak patch) so a room is
+seen from the inside. Checked on ALab: the lab with its benches and the
+character, not the garden.
