@@ -214,7 +214,9 @@ inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
             return;
         }
         if (sel.paths.empty()) {
-            rep.Warn("strip", std::string("no prim matched the ") + label +
+            // not a warning: the presets ask for lights and proxies to go
+            // whether a scene has any or not
+            rep.Info("strip", std::string("no prim matched the ") + label +
                                   " filter — nothing dropped by it");
             return;
         }
@@ -477,6 +479,10 @@ inline void StripDrawModeCards(Report& rep, const UsdStageRefPtr& flat) {
                               " card texture(s) no longer needed");
     }
 }
+
+// NukeCompat.cpp: what is left after the recipe, made readable for Nuke -
+// converted or replaced, never dropped, and every substitution reported.
+void MakeNukeReadable(Report& rep, const UsdStageRefPtr& flat);
 
 // UdimAtlas.cpp: stitch every multi-tile UDIM set a UsdUVTexture reads
 // into one image under `atlasDir` and put a UsdTransform2d in front of

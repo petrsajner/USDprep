@@ -195,6 +195,8 @@ void ExportPanel::ChoosePreset(int choice, const std::string& recipePath) {
                 : _recipe.simplifyRatio > 0.35 ? 1
                 : _recipe.simplifyRatio > 0.17 ? 2
                                                : 3;
+    _includeLights =
+        std::find(_recipe.dropTypes.begin(), _recipe.dropTypes.end(), "light") == _recipe.dropTypes.end();
     _dropGuideProxy = std::find(_recipe.dropPurposes.begin(), _recipe.dropPurposes.end(), "guide") !=
                           _recipe.dropPurposes.end() ||
                       std::find(_recipe.dropPurposes.begin(), _recipe.dropPurposes.end(), "proxy") !=
@@ -500,17 +502,31 @@ void ExportPanel::DrawAdvanced() {
                           "shape. The result is triangles.");
     }
 
+    // Off by default because it causes trouble in Nuke; switched on, what
+    // Nuke cannot read is replaced by something it can, and reported.
+    ImGui::Checkbox("Include lights", &_includeLights);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Off by default: with a light in the file Nuke stops showing\n"
+                          "surfaces unlit and the picture goes dark. Switched on, sphere,\n"
+                          "disk and dome lights come along as lights; the types Nuke cannot\n"
+                          "read (distant, rect, cylinder...) become axes of the same name,\n"
+                          "in the same place, so you can rebuild them. The report lists them.");
+    }
+
     // Every reduction the preset makes is a switch here, so the original
     // is always one click away.
     ImGui::Checkbox("Remove guide and proxy geometry", &_dropGuideProxy);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Stand-in and helper geometry a production asset carries for its\n"
-                          "own viewers. Nuke shows the real thing.");
+                          "own viewers. Nuke draws all of it, so the asset would show twice:\n"
+                          "switched off, it stays in the file but hidden.");
     }
     ImGui::Checkbox("Remove renderer-only shader networks", &_stripRenderContexts);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Arnold, RenderMan and similar material outputs that Nuke cannot\n"
-                          "render, with the shaders and textures only they use.");
+                          "render, with the shaders and textures only they use. Switched off\n"
+                          "they stay - except MaterialX outputs, which make Nuke render the\n"
+                          "material black.");
     }
     ImGui::Checkbox("Remove unused materials", &_stripUnusedMaterials);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Materials nothing in the export is bound to.");
@@ -519,9 +535,11 @@ void ExportPanel::DrawAdvanced() {
         ImGui::SetTooltip("Six small textures on a box that stand in for the asset in some\n"
                           "viewers. Nuke never draws them.");
     }
-    if (!_recipe.dropTypes.empty()) {
-        std::string types;
-        for (const std::string& t : _recipe.dropTypes) types += (types.empty() ? "" : ", ") + t;
+    std::string types;
+    for (const std::string& t : _recipe.dropTypes) {
+        if (t != "light") types += (types.empty() ? "" : ", ") + t;  // lights have their own switch
+    }
+    if (!types.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TextWrapped("This recipe also removes every: %s", types.c_str());
         ImGui::PopStyleColor();
@@ -554,6 +572,9 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
         options.dropPurposes.push_back("guide");
         options.dropPurposes.push_back("proxy");
     }
+    options.dropTypes.erase(std::remove(options.dropTypes.begin(), options.dropTypes.end(), std::string("light")),
+                            options.dropTypes.end());
+    if (!_includeLights) options.dropTypes.push_back("light");
     options.stripRenderContexts = _stripRenderContexts;
     options.stripUnusedMaterials = _stripUnusedMaterials;
     options.stripDrawModeCards = _stripCards;

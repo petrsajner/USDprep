@@ -10,6 +10,7 @@ import nuke
 PROBES = os.environ["USDPREP_PROBES"].replace("\\", "/")
 TAG = os.environ.get("USDPREP_TAG", "nuke%d" % nuke.NUKE_VERSION_MAJOR)
 RENDERS = PROBES + "/renders_" + TAG
+os.makedirs(PROBES + "/tex", exist_ok=True)
 os.makedirs(RENDERS, exist_ok=True)
 manifest = json.load(open(PROBES + "/manifest.json"))
 SIZE = 128

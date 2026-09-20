@@ -27,15 +27,6 @@ def Xform "World"
 
     def Scope "Lights"
     {
-        def SphereLight "KeyLight"
-        {
-            float inputs:intensity = 500
-        }
-
-        def DistantLight "SunLight"
-        {
-            float inputs:intensity = 2
-        }
     }
 
     def Camera "ShotCam"

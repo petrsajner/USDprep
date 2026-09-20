@@ -50,6 +50,7 @@ private:
     int _textureCap = 0;  // index into the cap choices (0 = no cap)
     int _geometry = 0;    // 0 = as it is, 1 = half, 2 = a quarter, 3 = a tenth of the polygons
     // Every reduction is a switch of its own, whatever the preset said.
+    bool _includeLights = false;  // off by default: a file's lights darken Nuke's render
     bool _dropGuideProxy = false;
     bool _stripRenderContexts = false;
     bool _stripUnusedMaterials = false;

@@ -73,7 +73,7 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     // if missing.
     const bool hasFilters = !options.dropTypes.empty() || !options.dropPurposes.empty();
     const bool hasStrip = options.materialPurpose != "all" || options.stripRenderContexts ||
-                          options.stripUnusedMaterials || options.stripDrawModeCards || options.udimAtlas ||
+                          options.stripUnusedMaterials || options.stripDrawModeCards || options.udimAtlas || options.nukeCompat ||
                           options.animation != "all" || options.simplifyRatio > 0.0;
     if (options.setDefaultPrim || hasFilters || hasStrip) {
         const UsdStageRefPtr flat = UsdStage::Open(tmpPath);
@@ -84,6 +84,7 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
         DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
         StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
                        options.stripUnusedMaterials, options.udimAtlas);
+    if (options.nukeCompat) MakeNukeReadable(rep, flat);
     if (options.udimAtlas) {
         AtlasUdimTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
                           options.maxTextureSize);

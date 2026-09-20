@@ -30,6 +30,11 @@ struct Recipe {
     // Nuke does not read UDIM tile sets: stitch each multi-tile set into one
     // texture and squeeze the UVs into it inside the material.
     bool udimAtlas = true;
+    // Whatever is left that Nuke cannot read is converted or replaced and
+    // reported (NUKE_COMPAT.md): kept guide/proxy geometry is hidden,
+    // MaterialX outputs next to a standard surface go, meshes are unbound
+    // from materials Nuke cannot render, unsupported lights become axes.
+    bool nukeCompat = true;
     // Textures above this many pixels on the longer side are scaled down
     // in the output; 0 leaves them alone.
     int maxTextureSize = 0;

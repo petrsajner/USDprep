@@ -29,6 +29,11 @@ struct PruneOptions {
     // Nuke does not read UDIM tile sets: stitch each multi-tile set into one
     // texture and squeeze the UVs into it inside the material.
     bool udimAtlas = true;
+    // Whatever is left that Nuke cannot read is converted or replaced and
+    // reported (NUKE_COMPAT.md): kept guide/proxy geometry is hidden,
+    // MaterialX outputs next to a standard surface go, meshes are unbound
+    // from materials Nuke cannot render, unsupported lights become axes.
+    bool nukeCompat = true;
     int maxTextureSize = 0;
     double simplifyRatio = 0.0;
     // Animation, as in ExtractOptions.

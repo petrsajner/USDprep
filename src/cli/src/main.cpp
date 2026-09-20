@@ -8,6 +8,7 @@
 //   usdcut inspect <scene> [--report out.json]
 //   usdcut presets [<name>]
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -71,6 +72,11 @@ void PrintUsage() {
         << "                         per asset that Nuke never draws)\n"
         << "  --keep-udim            leave UDIM tile sets as they are (Nuke renders those\n"
         << "                         black); default: stitch each set into one texture\n"
+        << "  --lights               keep the lights (the nuke preset leaves them out:\n"
+        << "                         they darken Nuke's render); the types Nuke cannot\n"
+        << "                         read become axes of the same name\n"
+        << "  --as-is                skip the conversions that make the rest readable\n"
+        << "                         for Nuke (see NUKE_COMPAT.md)\n"
         << "  --max-texture <px>     scale textures down to this many pixels on the\n"
         << "                         longer side, in the output only (0 = no cap)\n"
         << "  --simplify <ratio>     decimate meshes to this share of their triangles,\n"
@@ -133,6 +139,8 @@ struct CommonOptions {
     bool keepUnusedMaterials = false;
     bool keepCards = false;
     bool keepUdim = false;
+    bool asIs = false;
+    bool lights = false;
     int maxTextureSize = -1;  // -1 = the recipe decides
     double simplifyRatio = -1.0;  // -1 = the recipe decides
     std::string animation;  // empty = the recipe decides
@@ -177,6 +185,11 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
     if (common.keepCards) options->stripDrawModeCards = false;
     if (common.keepUdim) options->udimAtlas = false;
+    if (common.asIs) options->nukeCompat = false;
+    if (common.lights) {
+        auto& types = options->dropTypes;
+        types.erase(std::remove(types.begin(), types.end(), std::string("light")), types.end());
+    }
     if (common.maxTextureSize >= 0) options->maxTextureSize = common.maxTextureSize;
     if (common.simplifyRatio >= 0.0) options->simplifyRatio = common.simplifyRatio;
     if (!common.animation.empty()) options->animation = common.animation;
@@ -238,6 +251,10 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             common.keepCards = true;
         } else if (a == "--keep-udim") {
             common.keepUdim = true;
+        } else if (a == "--lights") {
+            common.lights = true;
+        } else if (a == "--as-is") {
+            common.asIs = true;
         } else if (a == "--max-texture") {
             if (++i >= args.size()) { error = "--max-texture needs a pixel count"; return -1; }
             common.maxTextureSize = static_cast<int>(std::strtol(args[i].c_str(), nullptr, 10));

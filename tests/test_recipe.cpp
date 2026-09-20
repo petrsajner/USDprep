@@ -151,7 +151,8 @@ int main() {
         CHECK(rep.ok);
         CHECK(rep.after.meshes == 3);   // Chair, Table, the de-instanced BoltGeo
         CHECK(rep.after.instances == 0);
-        CHECK(rep.after.lights == 2);   // lights and the camera are kept
+        CHECK(rep.after.lights == 0);   // lights are off by default: they darken Nuke's render
+        CHECK(Contains(nuke.dropTypes, "light"));
         CHECK(rep.after.cameras == 1);
     }
 

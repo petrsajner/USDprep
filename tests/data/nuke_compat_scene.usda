@@ -1,0 +1,103 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for the things Nuke cannot read (NUKE_COMPAT.md):
+# - Proxy is proxy geometry with animated visibility (Nuke draws every purpose)
+# - Both has a MaterialX output next to its standard surface (Nuke renders black)
+# - RendererOnly has nothing Nuke can render (Nuke does not draw the mesh)
+# - a sphere light Nuke reads, a distant and a rect light it does not
+def Xform "Root"
+{
+    def Mesh "Render" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        rel material:binding = </Root/Looks/Both>
+    }
+
+    def Mesh "Proxy"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        uniform token purpose = "proxy"
+        token visibility.timeSamples = {
+            1: "inherited",
+            5: "invisible",
+        }
+    }
+
+    def Mesh "Exotic" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        color3f[] primvars:displayColor = [(0.2, 0.6, 0.2)]
+        rel material:binding = </Root/Looks/RendererOnly>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Both"
+        {
+            token outputs:surface.connect = </Root/Looks/Both/Surface.outputs:surface>
+            token outputs:mtlx:surface.connect = </Root/Looks/Both/Mtlx.outputs:out>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.8, 0.1, 0.1)
+                token outputs:surface
+            }
+
+            def Shader "Mtlx"
+            {
+                uniform token info:id = "ND_standard_surface_surfaceshader"
+                color3f inputs:base_color = (0.1, 0.8, 0.1)
+                token outputs:out
+            }
+        }
+
+        def Material "RendererOnly"
+        {
+            token outputs:ri:surface.connect = </Root/Looks/RendererOnly/Pxr.outputs:out>
+
+            def Shader "Pxr"
+            {
+                uniform token info:id = "PxrSurface"
+                token outputs:out
+            }
+        }
+    }
+
+    def Scope "Lights"
+    {
+        def SphereLight "Bulb"
+        {
+            float inputs:intensity = 50
+        }
+
+        def DistantLight "Sun"
+        {
+            float inputs:intensity = 3
+            float3 xformOp:rotateXYZ = (-45, 30, 0)
+            uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+        }
+
+        def RectLight "Panel"
+        {
+            float inputs:width = 2
+            double3 xformOp:translate = (0, 4, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+}

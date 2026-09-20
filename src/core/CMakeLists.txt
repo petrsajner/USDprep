@@ -10,6 +10,7 @@ add_library(usdprep-core
     src/Select.cpp
     src/Simplify.cpp
     src/UdimAtlas.cpp
+    src/NukeCompat.cpp
     src/StageInfo.cpp
 )
 add_library(usdprep::core ALIAS usdprep-core)
