@@ -17,6 +17,7 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
     Report rep;
     rep.inputPath = inputPath;
     rep.outputPath = options.outputPath;
+    DiagnosticsToReport diagnostics(rep);
 
     if (options.primPaths.empty()) {
         rep.Fail("no prim paths given");

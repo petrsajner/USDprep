@@ -40,6 +40,7 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
     Report rep;
     rep.inputPath = inputPath;
     rep.outputPath = options.outputPath;
+    DiagnosticsToReport diagnostics(rep);
 
     const bool keepMode = !options.keepPaths.empty();
     const bool dropMode = !options.dropPaths.empty() || !options.dropTypes.empty() ||

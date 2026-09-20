@@ -4,10 +4,14 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 #include <pxr/usd/sdf/assetPath.h>
+#include <pxr/base/tf/diagnosticBase.h>
+#include <pxr/base/tf/diagnosticMgr.h>
 #include <pxr/base/tf/pathUtils.h>
 #include <pxr/usd/ar/resolvedPath.h>
 #include <pxr/usd/ar/resolver.h>
@@ -25,6 +29,7 @@
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usd/stage.h>
 #include <pxr/usd/usdShade/udimUtils.h>
+#include <pxr/usd/usdUtils/coalescingDiagnosticDelegate.h>
 #include <pxr/usd/usdUtils/dependencies.h>
 #include <pxr/usd/usdUtils/localizeAsset.h>
 #include <pxr/usd/usdUtils/usdzPackage.h>
@@ -37,6 +42,82 @@ namespace usdprep {
 namespace detail {
 
 using namespace pxr;
+
+// Everything USD says during a run ends up in the report, grouped, with
+// the known noise turned into one plain sentence — instead of scrolling
+// past in a console the artist never sees. Lives for the duration of an
+// operation; the harvest happens when it goes out of scope, whichever
+// way the operation returns.
+class DiagnosticsToReport {
+public:
+    explicit DiagnosticsToReport(Report& rep) : _rep(rep) {}
+    ~DiagnosticsToReport() { Harvest(); }
+    DiagnosticsToReport(const DiagnosticsToReport&) = delete;
+    DiagnosticsToReport& operator=(const DiagnosticsToReport&) = delete;
+
+private:
+    void Harvest() {
+        std::set<std::string> unknownFields;
+        std::vector<std::pair<std::string, size_t>> others;  // message, count
+        for (const auto& diagnostic : _delegate.TakeUncoalescedDiagnostics()) {
+            const std::string& message = diagnostic->GetCommentary();
+            const char* function = diagnostic->GetContext().GetFunction();
+            // The localizer complains about every asset path it re-queues
+            // after rewriting it, UDIM templates included, and then copies
+            // the file anyway. Files that are truly missing were taken out
+            // and reported before it ran.
+            if (function && std::string(function) == "_EnqueueDependency") continue;
+            // Flatten cannot carry metadata fields it has no schema for
+            // (a DCC's private bookkeeping, typically). Worth one line, not
+            // one warning per prim.
+            const size_t unknownAt = message.find("unknown field '");
+            if (unknownAt != std::string::npos) {
+                const size_t start = unknownAt + 15;
+                const size_t end = message.find('\'', start);
+                if (end != std::string::npos) unknownFields.insert(message.substr(start, end - start));
+                continue;
+            }
+            if (diagnostic->GetDiagnosticCode() == TfEnum(TF_DIAGNOSTIC_STATUS_TYPE)) continue;
+            bool seen = false;
+            for (auto& entry : others) {
+                if (entry.first == message) {
+                    ++entry.second;
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) others.emplace_back(message, 1);
+        }
+
+        if (!unknownFields.empty()) {
+            std::string names;
+            size_t listed = 0;
+            for (const std::string& field : unknownFields) {
+                if (listed++ == 4) {
+                    names += ", ...";
+                    break;
+                }
+                names += (names.empty() ? "" : ", ") + field;
+            }
+            _rep.Info("metadata", std::to_string(unknownFields.size()) +
+                                      " custom metadata field(s) from the source pipeline were "
+                                      "not carried over: " + names);
+        }
+        constexpr size_t kMaxListed = 8;
+        for (size_t i = 0; i < others.size() && i < kMaxListed; ++i) {
+            _rep.Warn("usd", others[i].first +
+                                 (others[i].second > 1 ? " (x" + std::to_string(others[i].second) + ")"
+                                                       : ""));
+        }
+        if (others.size() > kMaxListed) {
+            _rep.Warn("usd", "... and " + std::to_string(others.size() - kMaxListed) +
+                                 " more kind(s) of warning");
+        }
+    }
+
+    Report& _rep;
+    UsdUtilsCoalescingDiagnosticDelegate _delegate;
+};
 
 inline bool HasExtension(const std::string& path, const std::string& lowerExt) {
     std::string ext = std::filesystem::path(path).extension().string();

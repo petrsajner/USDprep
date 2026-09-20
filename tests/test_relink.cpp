@@ -61,6 +61,12 @@ int main() {
         const usdprep::Report rep = usdprep::ExtractPrims(scene, options);
         CHECK(rep.ok);
         CHECK(fs::exists(options.outputPath));
+        // USD's localizer grumbles about every UDIM template it then
+        // expands; that noise must not reach the report as a warning
+        for (const usdprep::ReportEntry& entry : rep.entries) {
+            CHECK(entry.action != "usd");
+            CHECK(entry.detail.find("Failed to resolve") == std::string::npos);
+        }
 
         const fs::path sidecar = outDir / "panel_textures";
         CHECK(fs::is_directory(sidecar));
