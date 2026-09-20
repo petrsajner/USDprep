@@ -58,10 +58,32 @@ removed on uninstall). The first page states the requirements (OpenGL
 
 | Item | State |
 |---|---|
-| Own USD build with **OpenImageIO** (`.tx/.tex` textures) and **Alembic** (level-3 `.abc`) | not started — hours of compiling and ~1 GB of source downloads; both need a Nuke probe first ("only what Nuke reads") |
+| Own USD build with OpenImageIO / Alembic | **probably not needed** - measured: Nuke reads `.tx` itself, and with a Nuke 16 floor `.abc/.obj/.fbx` export has no reason (`NUKE_COMPAT.md`). OIIO would only let *us* resize/atlas `.tx`/TIFF textures; today those are passed through untouched and reported |
 | Linux build + AppImage | not started — no Linux machine here |
 | Nuke matrix | 16.1v4 and 17.0v1 measured (`NUKE_COMPAT.md`), identical; 16.0 is not installed |
 | First-run GPU check (clear message below OpenGL 4.5) | usdtweak prints the GL version at start; behaviour on an old driver not tested |
 | Qualified driver table | one data point: NVIDIA 591.86 / RTX 5090 |
-| A licence for usdprep itself | none in the repo yet — Petr's call |
+| A licence for USDprep itself | Apache-2.0, the same as usdtweak (`LICENSE`, `NOTICE`) |
 | v1.0 tag | after the above |
+
+## Slice 2: the name, the licence, finding your way in the 3D view
+
+- The program and the distribution are **USDprep**: window title,
+  `USDprep.exe` in the bundle, installer, Start menu. usdtweak keeps its
+  credit in the About box and in `NOTICE`.
+- Licence: Apache-2.0 - "the same as usdtweak", which turned out to be
+  Apache-2.0, not MIT. Just as free for commercial use and modification.
+- **F threw the camera "out of the house".** Framing keeps the viewing
+  direction, so for an object in a room a wall ended up between camera
+  and object. Two changes in usdtweak, carried as
+  `tools/usdtweak-patches/0001-*.patch` and applied by
+  `tools/sync-addon.sh`: the fit distance is the bounding sphere in the
+  narrower field of view, and while a selection is framed the near
+  clipping plane rides just in front of that sphere - what stands in
+  front is cut away. Framing the whole scene or walking (right mouse
+  button) puts the walls back. Checked on ALab: a tesla coil on a bench
+  inside the lab is in full view after F.
+- The panel got "Frame selection (F)", "Whole scene (A)" - the way back
+  from anywhere - and a "How to move (?)" tooltip with the mouse
+  controls. While walking (right button held) the arrows, F and A belong
+  to the 3D view, not to the tree.

@@ -81,6 +81,35 @@ column is enough.
 | RectLight, CylinderLight | ignored altogether | |
 | Camera in the file | ✅ through the Camera node's import (translate, focal) | |
 
+## Textures in `.tx`, and the level-3 formats (second measurement)
+
+Same result in Nuke 16.1v4 and 17.0v1 (`tools/nuke/make_tx.py`,
+`tools/nuke/probe_formats.py`):
+
+| Question | Nuke | |
+|---|---|---|
+| `.tx` texture (tiled, mip-mapped TIFF - the structure maketx writes; hand-built, 8-bit, uncompressed) | ✅ read, same colour as the PNG | a `.tx` can go to Nuke as it is |
+| the same file named `.tif` | ✅ | it is the TIFF reader doing it |
+| `.abc` written by Nuke, read through GeoImport (the USD 3D system) | ✅ | |
+| `.obj`, `.fbx` through GeoImport | ❌ nothing is drawn, no error | |
+| `.obj`, `.fbx` through the classic ReadGeo | inconclusive - the classic render rig of the probe did not produce an image | |
+
+Not measured: compressed / half-float / EXR-based `.tx` as a renderer's
+maketx would write them (no working maketx on this machine), and
+RenderMan's `.tex`, which is a different format altogether.
+
+What follows for the plan:
+
+- **OpenImageIO is not needed to get `.tx` into Nuke** - Nuke reads it.
+  It would only be needed for *us* to open such textures (the resolution
+  cap and the UDIM atlas skip what Hio cannot read, and say so), and for
+  `.tex`.
+- **Level 3 (export to .abc / .fbx / .obj) has lost its reason**: the
+  floor is Nuke 16, whose 3D system reads our `.usdc` natively and with
+  materials; `.abc` would carry less, `.obj`/`.fbx` are not read by that
+  system at all. Under "offer only what Nuke reads" they stay out, and
+  the Alembic build of USD with them.
+
 ## What the tool does about it
 
 The rule (Petr, 2026-09-20): stay as close as possible to what a 3D

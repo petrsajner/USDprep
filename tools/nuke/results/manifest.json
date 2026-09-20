@@ -607,5 +607,23 @@
    1,
    10
   ]
+ },
+ "tex_tx": {
+  "file": "tex_tx.usda",
+  "question": ".tx texture (tiled, mip-mapped TIFF as maketx writes it)",
+  "expect": "blue if read",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "tex_tif_tiled": {
+  "file": "tex_tif_tiled.usda",
+  "question": "the same tiled mip-mapped TIFF, named .tif",
+  "expect": "blue if read",
+  "light": false,
+  "frames": [
+   1
+  ]
  }
 }
