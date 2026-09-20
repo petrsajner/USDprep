@@ -1,0 +1,108 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+)
+
+# Fixture for "only what Nuke reads": the hero material of Tiled uses a
+# two-tile UDIM set (Nuke renders that black) and has a light one next to
+# it; Plain's hero material is an ordinary texture; Alone has a tiled hero
+# material and nothing to fall back to.
+def Xform "Root"
+{
+    def Scope "Geo"
+    {
+        def Mesh "Tiled" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding:full = </Root/Looks/HeroTiled>
+            rel material:binding:preview = </Root/Looks/Light>
+        }
+
+        def Mesh "Plain" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding:full = </Root/Looks/HeroPlain>
+            rel material:binding:preview = </Root/Looks/Light>
+        }
+
+        def Mesh "Alone" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding:full = </Root/Looks/HeroTiled>
+        }
+    }
+
+    def Scope "Looks"
+    {
+        def Material "HeroTiled"
+        {
+            token outputs:surface.connect = </Root/Looks/HeroTiled/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/HeroTiled/Tex.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/big.<UDIM>.png@
+                float3 outputs:rgb
+            }
+        }
+
+        def Material "HeroPlain"
+        {
+            token outputs:surface.connect = </Root/Looks/HeroPlain/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/HeroPlain/Tex.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/big.png@
+                float3 outputs:rgb
+            }
+        }
+
+        def Material "Light"
+        {
+            token outputs:surface.connect = </Root/Looks/Light/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Light/Tex.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/checker.png@
+                float3 outputs:rgb
+            }
+        }
+    }
+}

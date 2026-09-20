@@ -178,6 +178,32 @@ int main() {
         CHECK(Inspect((outDir / "cards_kept.usdc").string()).textures.size() == 6);
     }
 
+    // --- only what Nuke reads: a hero material on a multi-tile UDIM set
+    //     gives way to the light one; an ordinary hero material stays ---
+    {
+        const usdprep::Report rep =
+            Export(FIXTURE_DIR "/udim_hero_scene.usda", outDir / "udim_hero.usdc", "full", true, true);
+        CHECK(rep.ok);
+        const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open((outDir / "udim_hero.usdc").string());
+        const auto boundTo = [&](const char* prim) {
+            pxr::SdfPathVector targets;
+            stage->GetPrimAtPath(pxr::SdfPath(prim)).GetRelationship(pxr::TfToken("material:binding")).GetTargets(&targets);
+            return targets.empty() ? std::string() : targets.front().GetString();
+        };
+        CHECK(boundTo("/Root/Geo/Tiled") == "/Root/Looks/Light");
+        CHECK(boundTo("/Root/Geo/Plain") == "/Root/Looks/HeroPlain");
+        CHECK(boundTo("/Root/Geo/Alone") == "/Root/Looks/HeroTiled");  // nothing to fall back to
+        int fallbackWarnings = 0;
+        int udimWarnings = 0;
+        for (const usdprep::ReportEntry& e : rep.entries) {
+            if (e.action != "nuke") continue;
+            if (e.detail.find("light material instead") != std::string::npos) ++fallbackWarnings;
+            if (e.detail.find("render black") != std::string::npos) ++udimWarnings;
+        }
+        CHECK(fallbackWarnings == 1);
+        CHECK(udimWarnings == 1);  // Alone is still said out loud
+    }
+
     // --- the presets say what they mean ---
     {
         usdprep::Recipe nuke;

@@ -1,6 +1,6 @@
 // usdcut — CLI face of usdprep-core.
 //
-//   usdcut extract <scene.usd(a|c|z)> <prim-path>... -o out.usdz|usdc|usda
+//   usdcut extract <scene.usd(a|c|z)> <prim-path>... -o out.usdc|usda
 //   usdcut prune   <scene> --except /A,/B -o out.usdc   (keep only)
 //   usdcut prune   <scene> --drop /A,/B -o out.usdc     (delete selection)
 //   usdcut prune   <scene> --drop-type light -o out.usdc
@@ -43,7 +43,7 @@ void PrintUsage() {
         << "usdcut " << USDPREP_VERSION_STRING
         << " — prepare USD scenes for compositing (USD " << UsdVersionString() << ")\n\n"
         << "usage:\n"
-        << "  usdcut extract <scene> <prim-path>... -o <out.usdz|usdc|usda> [options]\n"
+        << "  usdcut extract <scene> <prim-path>... -o <out.usdc|usda> [options]\n"
         << "  usdcut prune   <scene> (--except <paths> | --drop <paths> |\n"
         << "                          --drop-type <types> | --drop-purpose <purposes>)\n"
         << "                         -o <out> [options]\n"
@@ -53,7 +53,7 @@ void PrintUsage() {
         << "  usdcut presets [<name>]   list the built-in recipes, or print one\n"
         << "  usdcut version | help\n\n"
         << "common options:\n"
-        << "  -o, --output <path>    output file (.usda, .usdc or .usdz)\n"
+        << "  -o, --output <path>    output file (.usdc or .usda)\n"
         << "  --preset <name>        start from a built-in recipe (usdcut presets)\n"
         << "  --recipe <file.json>   start from a recipe file; later flags win\n"
         << "  --report <file.json>   write the operation report as JSON\n"
@@ -192,6 +192,14 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
         if (a == "-o" || a == "--output") {
             if (++i >= args.size()) { error = "--output needs a value"; return -1; }
             common.output = args[i];
+            // Nuke loads a package's geometry and none of its textures;
+            // this tool writes what Nuke reads.
+            const std::string& o = common.output;
+            if (o.size() >= 5 && o.compare(o.size() - 5, 5, ".usdz") == 0) {
+                error = "a .usdz package is not an output: Nuke does not read the textures "
+                        "inside one. Write a .usdc (textures go into a folder next to it)";
+                return -1;
+            }
         } else if (a == "--report") {
             if (++i >= args.size()) { error = "--report needs a value"; return -1; }
             common.reportPath = args[i];

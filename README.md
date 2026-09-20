@@ -8,7 +8,7 @@ usable on farms today.
 - Study & plan: `STUDY_AND_PLAN.md` · spike log: `M0_LOG.md`
 - Compatibility floor: Nuke 16.0 (USD 24.05 reader) · build pin: OpenUSD 25.x
 - Output profile: flattened, self-contained, UsdPreviewSurface-renderable,
-  `.usdc` + textures folder (what Nuke reads) or `.usdz` (other apps)
+  `.usdc` + textures folder — the one thing Nuke reads, textures included
 
 ## Layout
 
@@ -49,7 +49,7 @@ ctest --test-dir build -C RelWithDebInfo --output-on-failure
 ## Usage
 
 ```
-usdcut extract scene.usd /World/Set/Car -o car.usdz --preset nuke --report car.json
+usdcut extract scene.usd /World/Set/Car -o car.usdc --preset nuke --report car.json
 usdcut prune scene.usd --except /World/Set/Car,/World/Cameras/shotCam -o shot_min.usdc
 usdcut prune scene.usd --drop /World/Lights -o no_lights.usdc
 usdcut prune scene.usd --drop-type light --drop-purpose guide,proxy -o clean.usdc
@@ -68,11 +68,18 @@ is the shipped answer to "give me something I can drop into a comp";
 `--recipe my.json` reads your own (start it from a preset and override the
 two lines you care about). Flags you type win over the recipe.
 
-**Textures.** A `.usdz` output carries them inside the package — but Nuke 17
-does not read textures from inside a package, so for Nuke export a `.usdc`. A
-`.usdc`/`.usda` output copies them into a `<name>_textures` folder next to
-the file and points the file at the copies, UDIM tile sets included —
-keep the two together, or pass `--no-relink` to leave the paths alone.
+**Only what Nuke reads.** The tool offers nothing Nuke cannot load. The
+output is a `.usdc` (or `.usda`); a `.usdz` is refused, because Nuke 17
+loads a package's geometry and none of its textures. Where a full-quality
+material sits on a multi-tile UDIM set — Nuke does not expand `<UDIM>` and
+renders it black — the object gets its light material instead and the
+report says so. Other applications are served by stock usdtweak or by
+building on `usdprep-core`, which still packages.
+
+**Textures.** They are copied into a `<name>_textures` folder next to the
+file, and the file points at the copies (single-tile UDIM sets become the
+tile itself) — keep the two together, or pass `--no-relink` to leave the
+paths alone.
 
 **Materials.** Production assets often bind two materials per object: a
 heavy one for final renders (`material:binding:full`, 4K UDIM sets) and a

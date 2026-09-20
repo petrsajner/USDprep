@@ -57,8 +57,7 @@ private:
     double _staticFrame = 0.0;
     bool _staticFrameSet = false;  // typed by the artist, else the scene's start
 
-    char _outputPath[512] = "";
-    int _format = 0;  // 0 = .usdc layer + textures folder, 1 = .usdz package
+    char _outputPath[512] = "";  // always a .usdc: the format Nuke reads, textures included
     double _sceneStart = 0.0;  // the scene's frame range, for the labels
     double _sceneEnd = 0.0;
     pxr::UsdStageRefPtr _suggestedFor;

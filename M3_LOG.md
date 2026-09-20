@@ -219,6 +219,26 @@ Render times, two frames each: original jar 1.95 s, nuke preset 1.2 s,
 decimated to a tenth 0.5–0.7 s. Load itself is lazy in Nuke; the
 render is the honest number.
 
+## Only what Nuke reads (product rule, after the validation)
+
+Petr's rule: the tool must not offer anything Nuke cannot read — a
+misleading option is the user's lost time. Whoever needs another
+application uses stock usdtweak or builds on the core. So:
+
+- The panel has one format, `.usdc` + textures folder; the format combo
+  and the `.usdz` save filter are gone. `usdcut` refuses a `.usdz`
+  output with the reason. The core library still packages (tests cover
+  it) — that is the "build it yourself" path.
+- "Full quality" materials: where the hero material uses a multi-tile
+  UDIM set and the object also has a light one, the light one is bound
+  and the report says so (`nuke` warning). With no light material to
+  fall back to, the black-material warning stays. Fixture
+  `udim_hero_scene.usda`.
+- Still open: "Original"/`--materials all` leaves both bindings, UDIM
+  included, because the original must stay exportable. The real fix for
+  hero looks in Nuke is stitching a UDIM set into one atlas texture and
+  remapping the UVs — a candidate for later.
+
 ## What the environment does not have
 
 - **OpenImageIO** and **meshoptimizer** are not in the conda USD env.

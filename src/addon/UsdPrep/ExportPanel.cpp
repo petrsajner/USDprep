@@ -114,20 +114,17 @@ std::string DialogResult(IFileDialog* dialog) {
 }
 
 // Native "Save as...". False = cancelled.
-bool NativeSaveDialog(const std::string& suggestedName, bool usdz, std::string& outPath) {
+bool NativeSaveDialog(const std::string& suggestedName, std::string& outPath) {
     if (!EnsureCom()) return false;
     IFileSaveDialog* dialog = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER,
                                 IID_PPV_ARGS(&dialog)))) {
         return false;
     }
-    const COMDLG_FILTERSPEC filters[] = {
-        {L"USD package (*.usdz)", L"*.usdz"},
-        {L"USD layer (*.usdc)", L"*.usdc"},
-    };
-    dialog->SetFileTypes(2, filters);
-    dialog->SetFileTypeIndex(usdz ? 1 : 2);
-    dialog->SetDefaultExtension(usdz ? L"usdz" : L"usdc");
+    // One format: what Nuke reads.
+    const COMDLG_FILTERSPEC filters[] = {{L"USD for Nuke (*.usdc)", L"*.usdc"}};
+    dialog->SetFileTypes(1, filters);
+    dialog->SetDefaultExtension(L"usdc");
     const std::wstring suggested = Utf8ToWide(suggestedName);
     if (!suggested.empty()) dialog->SetFileName(suggested.c_str());
     const std::string result = DialogResult(dialog);
@@ -377,7 +374,7 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (dir.empty()) dir = ".";
         std::string name = targets.front().GetName();
         if (name.empty()) name = "asset";
-        const std::string suggested = dir + "/" + name + (_format == 1 ? ".usdz" : ".usdc");
+        const std::string suggested = dir + "/" + name + ".usdc";
         std::snprintf(_outputPath, sizeof(_outputPath), "%s", suggested.c_str());
     }
 
@@ -395,10 +392,9 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (stem.empty() && !targets.empty()) stem = targets.front().GetName();
         if (stem.empty()) stem = "asset";
         std::string chosen;
-        if (NativeSaveDialog(stem + (_format == 1 ? ".usdz" : ".usdc"), _format == 1, chosen)) {
+        if (NativeSaveDialog(stem + ".usdc", chosen)) {
             std::snprintf(_outputPath, sizeof(_outputPath), "%s", chosen.c_str());
             _pathEdited = true;
-            _format = (chosen.size() >= 5 && chosen.compare(chosen.size() - 5, 5, ".usdz") == 0) ? 1 : 0;
         }
     }
 #else
@@ -407,21 +403,15 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
     ImGui::EndDisabled();
 #endif
 
-    const char* formats[] = {
-        "Layer (.usdc) + textures folder - what Nuke reads",
-        "Package (.usdz) - one file; Nuke 17 cannot read its textures",
-    };
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##format", &_format, formats, 2);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Layer: the scene file plus a \"<name>_textures\" folder next to it.\n"
-                          "Keep the two together. This is what Nuke 17 renders with textures.\n"
-                          "Package: one self-contained file for other applications - Nuke 17\n"
-                          "loads its geometry but not the textures inside it.");
-    }
-    // The extension follows the format - never while the artist is typing.
+    // One format, the one Nuke renders with textures: a .usdc and its
+    // textures folder. Nothing Nuke cannot read is on offer here.
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextWrapped("A .usdc file with a \"%s_textures\" folder next to it - keep the two together.",
+                       OutputNameOf(_outputPath).c_str());
+    ImGui::PopStyleColor();
+    // The extension is always .usdc - fixed up, but never while the artist is typing.
     if (!editingPath && _outputPath[0] != '\0') {
-        const std::string synced = WithExtension(_outputPath, _format == 1 ? ".usdz" : ".usdc");
+        const std::string synced = WithExtension(_outputPath, ".usdc");
         if (synced != _outputPath) std::snprintf(_outputPath, sizeof(_outputPath), "%s", synced.c_str());
     }
 }
@@ -438,16 +428,11 @@ void ExportPanel::DrawAdvanced() {
         ImGui::SetTooltip("Marks the main object of the exported file. Applications use\n"
                           "it to know what to load. Recommended.");
     }
-    const bool isLayer = _format == 0;
-    if (!isLayer) ImGui::BeginDisabled();
     ImGui::Checkbox("Copy textures next to the file", &_relinkTextures);
-    if (!isLayer) ImGui::EndDisabled();
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(isLayer ? "Copies every texture the objects use into a folder next to\n"
-                                    "the exported file and points the file at the copies.\n"
-                                    "Recommended."
-                                  : "Only applies to the .usdc format - a .usdz package\n"
-                                    "always carries its textures inside.");
+        ImGui::SetTooltip("Copies every texture the objects use into a folder next to\n"
+                          "the exported file and points the file at the copies.\n"
+                          "Recommended.");
     }
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Materials");
@@ -463,7 +448,8 @@ void ExportPanel::DrawAdvanced() {
         ImGui::SetTooltip("Production assets often carry two materials per object: a heavy\n"
                           "one for final renders (4K UDIM textures) and a light one for\n"
                           "previews. Nuke is happy with the light one, and it is a fraction\n"
-                          "of the size.");
+                          "of the size. Where the heavy one uses UDIM tile sets, which Nuke\n"
+                          "cannot read, the object gets its light one - the report says so.");
     }
 
     ImGui::AlignTextToFramePadding();

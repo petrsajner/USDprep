@@ -270,8 +270,30 @@ inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::s
     if (!choose && !stripRenderContexts && !stripUnused) return;
     const auto shown = UsdTraverseInstanceProxies(UsdPrimDefaultPredicate);
 
+    // A material Nuke would render black: one of its textures is a UDIM
+    // set of more than one tile, and Nuke does not expand the template.
+    std::map<SdfPath, bool> unreadableCache;
+    const auto unreadable = [&](const UsdPrim& materialPrim) {
+        const auto cached = unreadableCache.find(materialPrim.GetPath());
+        if (cached != unreadableCache.end()) return cached->second;
+        bool result = false;
+        for (const UsdPrim& node : UsdPrimRange(materialPrim, shown)) {
+            for (const UsdAttribute& attr : node.GetAttributes()) {
+                if (attr.GetTypeName() != SdfValueTypeNames->Asset) continue;
+                SdfAssetPath asset;
+                if (!attr.Get(&asset) || !UsdShadeUdimUtils::IsUdimIdentifier(asset.GetAssetPath())) continue;
+                if (UsdShadeUdimUtils::ResolveUdimTilePaths(asset.GetAssetPath(), flat->GetRootLayer()).size() > 1) {
+                    result = true;
+                }
+            }
+        }
+        unreadableCache[materialPrim.GetPath()] = result;
+        return result;
+    };
+
     // ----- 1. one material per prim, the purpose that was asked for -----
     size_t rebound = 0;
+    size_t fellBack = 0;
     if (choose) {
         const TfToken wanted(purpose);
         const TfToken other = purpose == "preview" ? UsdShadeTokens->full : UsdShadeTokens->preview;
@@ -285,9 +307,21 @@ inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::s
             if (wantedRel) wantedRel.GetTargets(&targets);
             // nothing for the wanted purpose: the other one is all there is
             if (targets.empty() && otherRel) otherRel.GetTargets(&targets);
-            const UsdShadeMaterial material(
+            UsdShadeMaterial material(
                 targets.empty() ? UsdPrim() : flat->GetPrimAtPath(targets.front()));
             if (!material) continue;
+            // The hero material would be black in Nuke and there is a
+            // light one next to it: the light one it is.
+            if (purpose == "full" && otherRel && unreadable(material.GetPrim())) {
+                SdfPathVector lightTargets;
+                otherRel.GetTargets(&lightTargets);
+                const UsdShadeMaterial light(
+                    lightTargets.empty() ? UsdPrim() : flat->GetPrimAtPath(lightTargets.front()));
+                if (light && !unreadable(light.GetPrim())) {
+                    material = light;
+                    ++fellBack;
+                }
+            }
             UsdShadeMaterialBindingAPI::Apply(prim);
             UsdShadeMaterialBindingAPI(prim).Bind(material, UsdShadeTokens->fallbackStrength,
                                                   UsdShadeTokens->allPurpose);
@@ -384,6 +418,11 @@ inline void StripMaterials(Report& rep, const UsdStageRefPtr& flat, const std::s
                                   " material; the " +
                                   (purpose == "preview" ? "full-quality" : "preview") +
                                   " one is no longer used");
+    }
+    if (fellBack > 0) {
+        rep.Warn("nuke", std::to_string(fellBack) +
+                             " object(s) got their light material instead: the full-quality one uses "
+                             "multi-tile UDIM textures, which Nuke 17 does not read");
     }
     if (contextsRemoved > 0) {
         rep.Info("materials", std::to_string(contextsRemoved) +
