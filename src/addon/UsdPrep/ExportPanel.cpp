@@ -53,7 +53,7 @@ bool BigButton(const char* label, const ImVec4& color, const ImVec2& size) {
 
 const char* PresetLabel(const std::string& name) {
     if (name == "nuke") return "Nuke-ready";
-    if (name == "raw") return "Raw copy";
+    if (name == "raw") return "Original (nothing changed)";
     return name.c_str();
 }
 
@@ -194,6 +194,17 @@ void ExportPanel::ChoosePreset(int choice, const std::string& recipePath) {
                   : _recipe.maxTextureSize >= 1024 ? 4
                   : _recipe.maxTextureSize > 0    ? 5
                                                   : 0;
+    _geometry = _recipe.simplifyRatio <= 0.0  ? 0
+                : _recipe.simplifyRatio > 0.35 ? 1
+                : _recipe.simplifyRatio > 0.17 ? 2
+                                               : 3;
+    _dropGuideProxy = std::find(_recipe.dropPurposes.begin(), _recipe.dropPurposes.end(), "guide") !=
+                          _recipe.dropPurposes.end() ||
+                      std::find(_recipe.dropPurposes.begin(), _recipe.dropPurposes.end(), "proxy") !=
+                          _recipe.dropPurposes.end();
+    _stripRenderContexts = _recipe.stripRenderContexts;
+    _stripUnusedMaterials = _recipe.stripUnusedMaterials;
+    _stripCards = _recipe.stripDrawModeCards;
     _staticFrameSet = !std::isnan(_recipe.staticFrame);
     if (_staticFrameSet) _staticFrame = _recipe.staticFrame;
 
@@ -489,23 +500,43 @@ void ExportPanel::DrawAdvanced() {
                           "the originals stay as they are.");
     }
 
-    std::string removed;
-    for (const std::string& t : _recipe.dropTypes) removed += (removed.empty() ? "" : ", ") + t;
-    for (const std::string& p : _recipe.dropPurposes) {
-        removed += (removed.empty() ? "" : ", ") + p + " geometry";
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Geometry");
+    ImGui::SameLine();
+    const char* geometryChoices[] = {"As it is", "Half the polygons", "A quarter of the polygons",
+                                     "A tenth of the polygons"};
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::Combo("##geometry", &_geometry, geometryChoices, 4);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Decimates dense meshes, keeping UVs and normals as well as it can.\n"
+                          "Never on by itself - a comp rarely needs it, and it changes the\n"
+                          "shape. The result is triangles.");
     }
-    if (_recipe.stripRenderContexts) {
-        removed += (removed.empty() ? "" : ", ") + std::string("renderer-only shader networks");
+
+    // Every reduction the preset makes is a switch here, so the original
+    // is always one click away.
+    ImGui::Checkbox("Remove guide and proxy geometry", &_dropGuideProxy);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Stand-in and helper geometry a production asset carries for its\n"
+                          "own viewers. Nuke shows the real thing.");
     }
-    if (_recipe.stripUnusedMaterials) {
-        removed += (removed.empty() ? "" : ", ") + std::string("unused materials");
+    ImGui::Checkbox("Remove renderer-only shader networks", &_stripRenderContexts);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Arnold, RenderMan and similar material outputs that Nuke cannot\n"
+                          "render, with the shaders and textures only they use.");
     }
-    if (_recipe.stripDrawModeCards) {
-        removed += (removed.empty() ? "" : ", ") + std::string("preview cards");
+    ImGui::Checkbox("Remove unused materials", &_stripUnusedMaterials);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Materials nothing in the export is bound to.");
+    ImGui::Checkbox("Remove preview cards", &_stripCards);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Six small textures on a box that stand in for the asset in some\n"
+                          "viewers. Nuke never draws them.");
     }
-    if (!removed.empty()) {
+    if (!_recipe.dropTypes.empty()) {
+        std::string types;
+        for (const std::string& t : _recipe.dropTypes) types += (types.empty() ? "" : ", ") + t;
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("This preset also removes: %s", removed.c_str());
+        ImGui::TextWrapped("This recipe also removes every: %s", types.c_str());
         ImGui::PopStyleColor();
     }
 }
@@ -525,6 +556,20 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     if (_animation == 2) options.staticFrame = _staticFrame;
     static const int kCaps[] = {0, 8192, 4096, 2048, 1024, 512};
     options.maxTextureSize = kCaps[_textureCap];
+    static const double kRatios[] = {0.0, 0.5, 0.25, 0.1};
+    options.simplifyRatio = kRatios[_geometry];
+    // the switches beat the recipe, both ways
+    options.dropPurposes.erase(
+        std::remove_if(options.dropPurposes.begin(), options.dropPurposes.end(),
+                       [](const std::string& p) { return p == "guide" || p == "proxy"; }),
+        options.dropPurposes.end());
+    if (_dropGuideProxy) {
+        options.dropPurposes.push_back("guide");
+        options.dropPurposes.push_back("proxy");
+    }
+    options.stripRenderContexts = _stripRenderContexts;
+    options.stripUnusedMaterials = _stripUnusedMaterials;
+    options.stripDrawModeCards = _stripCards;
     options.outputPath = _outputPath;
     for (const SdfPath& p : targets) options.primPaths.push_back(p.GetAsString());
 

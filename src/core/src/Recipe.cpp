@@ -207,6 +207,14 @@ bool LoadRecipe(const std::string& path, Recipe* recipe, std::string* error,
                 return false;
             }
             loaded.maxTextureSize = value.GetInt();
+        } else if (key == "simplifyRatio") {
+            const double ratio = value.IsInt() ? static_cast<double>(value.GetInt64())
+                                 : value.IsReal() ? value.GetReal() : -1.0;
+            if (ratio < 0.0 || ratio >= 1.0) {
+                *error = "'simplifyRatio' must be between 0 (as is) and 1, e.g. 0.25";
+                return false;
+            }
+            loaded.simplifyRatio = ratio;
         } else if (key == "animation") {
             const std::string choice = value.IsString() ? value.GetString() : "";
             if (choice != "all" && choice != "range" && choice != "static") {
@@ -248,6 +256,7 @@ std::string RecipeToJson(const Recipe& recipe) {
     os << "  \"stripUnusedMaterials\": " << (recipe.stripUnusedMaterials ? "true" : "false") << ",\n";
     os << "  \"stripDrawModeCards\": " << (recipe.stripDrawModeCards ? "true" : "false") << ",\n";
     os << "  \"maxTextureSize\": " << recipe.maxTextureSize << ",\n";
+    os << "  \"simplifyRatio\": " << recipe.simplifyRatio << ",\n";
     os << "  \"animation\": \"" << JsonEscape(recipe.animation) << "\"";
     // frames only when set: JSON has no way to say "the stage's own"
     if (!std::isnan(recipe.frameStart)) os << ",\n  \"frameStart\": " << recipe.frameStart;
@@ -268,6 +277,7 @@ void ApplyRecipe(const Recipe& recipe, ExtractOptions* options) {
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
     options->stripDrawModeCards = recipe.stripDrawModeCards;
     options->maxTextureSize = recipe.maxTextureSize;
+    options->simplifyRatio = recipe.simplifyRatio;
     options->animation = recipe.animation;
     options->frameStart = recipe.frameStart;
     options->frameEnd = recipe.frameEnd;
@@ -285,6 +295,7 @@ void ApplyRecipe(const Recipe& recipe, PruneOptions* options) {
     options->stripUnusedMaterials = recipe.stripUnusedMaterials;
     options->stripDrawModeCards = recipe.stripDrawModeCards;
     options->maxTextureSize = recipe.maxTextureSize;
+    options->simplifyRatio = recipe.simplifyRatio;
     options->animation = recipe.animation;
     options->frameStart = recipe.frameStart;
     options->frameEnd = recipe.frameEnd;

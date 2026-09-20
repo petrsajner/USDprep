@@ -35,6 +35,9 @@ struct ExtractOptions {
     // Textures larger than this on their longer side are scaled down in
     // the output (0 = leave them alone). The originals are never touched.
     int maxTextureSize = 0;
+    // Decimate meshes to this share of their triangles (0 < ratio < 1);
+    // 0 leaves the geometry alone. Opt-in, in every preset.
+    double simplifyRatio = 0.0;
     // Animation: "all" leaves it, "range" drops time samples outside
     // [frameStart, frameEnd] (the stage's own range when kStageFrame),
     // "static" bakes staticFrame (the range start when kStageFrame) as

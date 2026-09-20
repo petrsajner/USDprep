@@ -48,6 +48,12 @@ private:
     int _materials = 0;  // 0 = preview (light), 1 = full (hero), 2 = all
     int _animation = 1;  // 0 = everything, 1 = the shot range, 2 = one frame
     int _textureCap = 0;  // index into the cap choices (0 = no cap)
+    int _geometry = 0;    // 0 = as it is, 1 = half, 2 = a quarter, 3 = a tenth of the polygons
+    // Every reduction is a switch of its own, whatever the preset said.
+    bool _dropGuideProxy = false;
+    bool _stripRenderContexts = false;
+    bool _stripUnusedMaterials = false;
+    bool _stripCards = false;
     double _staticFrame = 0.0;
     bool _staticFrameSet = false;  // typed by the artist, else the scene's start
 

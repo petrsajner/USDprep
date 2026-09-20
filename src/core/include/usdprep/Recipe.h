@@ -30,6 +30,9 @@ struct Recipe {
     // Textures above this many pixels on the longer side are scaled down
     // in the output; 0 leaves them alone.
     int maxTextureSize = 0;
+    // Decimate meshes to this share of their triangles; 0 = as they are.
+    // Opt-in: no preset turns it on.
+    double simplifyRatio = 0.0;
     // Animation: "all" | "range" | "static", with the frames as in
     // ExtractOptions (kStageFrame = the stage's own).
     std::string animation = "all";

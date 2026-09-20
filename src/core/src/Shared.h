@@ -435,6 +435,10 @@ inline void StripDrawModeCards(Report& rep, const UsdStageRefPtr& flat) {
     }
 }
 
+// Simplify.cpp: decimate every mesh with at least `minFaces` faces to
+// `ratio` of its triangles (0 < ratio < 1; anything else = leave alone).
+void SimplifyMeshes(Report& rep, const UsdStageRefPtr& flat, double ratio, size_t minFaces = 500);
+
 inline std::string FormatFrame(double frame) {
     char buffer[32];
     std::snprintf(buffer, sizeof(buffer), "%g", frame);

@@ -88,6 +88,15 @@ larger than that on its longer side down — in the output only, the
 originals stay as they are; PNG, JPEG and EXR, UDIM sets tile by tile.
 `0` leaves every texture alone.
 
+**Geometry.** `--simplify 0.25` decimates dense meshes to a quarter of
+their triangles, keeping UVs and normals as well as it can (the result is
+triangles, per-vertex attributes, no subdivision). Never on by itself.
+
+**Everything above is a switch.** Each reduction has its own flag, the
+`raw` preset ("Original" in the panel) turns all of them off, and the
+panel's Advanced section shows every one as a checkbox or a choice —
+the original is always one click away.
+
 **Animation.** `--animation range` (the Nuke preset) drops time samples
 outside the scene's start/end — a simulation's pre-roll, typically —
 keeping one bracketing sample on each side; `--frames 1010-1020` picks the

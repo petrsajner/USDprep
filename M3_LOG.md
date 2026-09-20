@@ -125,6 +125,62 @@ Fixture `bigtex_scene.usda` (a 256×128 PNG, a 200×100 UDIM pair, the
 1×1 checker) and `test_textures` pin the scaling, the untouched
 originals, the package and the presets.
 
+## Simplify: decimation (2026-09-20)
+
+meshoptimizer 0.23 (MIT) is vendored verbatim under
+`src/third_party/meshoptimizer` and built as a static library the core
+links privately. `simplifyRatio` (0 = as it is; **no preset turns it
+on**): every mesh with ≥ 500 faces is decimated to that share of its
+triangles.
+
+How a USD mesh gets there and back:
+
+1. Every per-corner attribute the mesh has — primvars flattened through
+   their indices, plus `normals` — is expanded to floats per corner.
+   Float-family arrays only; per-face (`uniform`) values and anything
+   else are dropped and named. A single value under a per-vertex label
+   is treated as the constant it is.
+2. One **render vertex** per unique (point, attribute values) pair, so a
+   UV seam or a hard edge is a split vertex, the way a GPU sees it.
+   meshoptimizer welds positions for its own adjacency and keeps the
+   seams where they are.
+3. Faces are fan-triangulated (holes left out), decimated with
+   `meshopt_simplifyWithAttributes` (UV weight 0.5, normals 0.3, others
+   0.15, at most 32 attribute floats), no error ceiling — the ratio is
+   the contract.
+4. Collapses land on existing vertices, so the result is a vertex
+   subset plus a new triangle list. Every time sample of points and of
+   every carried attribute is remapped through that subset — animation
+   survives.
+5. Written back as triangles with every attribute vertex-interpolated,
+   extent recomputed per sample, subdivision scheme `none`, creases /
+   corners / holes gone. Meshes with per-face material subsets or
+   animated topology are left alone and reported.
+
+**ALab, the heaviest asset (`decor_choko_experiment01_0001`, 59 meshes,
+still frame):**
+
+| ratio | triangles | package | time |
+|---|---|---|---|
+| as it is | 714,506 | 13.1 MB | — |
+| 0.25 | 178,607 (24 %) | 4.8 MB | 1.7 s |
+| 0.10 | 71,404 (10 %) | 2.8 MB | — |
+
+Fixture `dense_scene.usda` (a 40×40 grid with a UV seam and vertex
+normals, a pebble below the minimum) and `test_simplify` pin the
+triangle count, the per-vertex UVs/normals, the untouched small mesh,
+the off-by-default and the presets.
+
+## Every reduction is a switch
+
+Asked for and now true everywhere: each reduction — materials purpose,
+renderer networks, unused materials, preview cards, guide/proxy
+geometry, texture cap, animation, decimation — is its own recipe key,
+its own CLI flag and its own checkbox or choice in the panel's
+Advanced section. The `raw` preset (shown as "Original (nothing
+changed)") turns all of them off; the panel's switches override
+whatever preset is chosen, both ways.
+
 ## What the environment does not have
 
 - **OpenImageIO** and **meshoptimizer** are not in the conda USD env.
@@ -132,9 +188,7 @@ originals, the package and the presets.
   so a **resolution cap** needs no new dependency. `.tex/.tx/.rat`
   conversion does, and waits for the release build of USD with OIIO
   (M4).
-- meshoptimizer would be vendored (MIT, a handful of files). Decimating
-  USD meshes with face-varying UVs is the hard part, not the library.
+- meshoptimizer is vendored now (see Simplify above).
 
 ## Next
 
-- Simplify (meshoptimizer, vendored) — the last M3 op.

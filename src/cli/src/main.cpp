@@ -71,6 +71,8 @@ void PrintUsage() {
         << "                         per asset that Nuke never draws)\n"
         << "  --max-texture <px>     scale textures down to this many pixels on the\n"
         << "                         longer side, in the output only (0 = no cap)\n"
+        << "  --simplify <ratio>     decimate meshes to this share of their triangles,\n"
+        << "                         e.g. 0.25 (0 = as they are; never on by default)\n"
         << "  --animation <mode>     all | range | static: keep every time sample, only\n"
         << "                         the shot range, or bake one frame (default: recipe's)\n"
         << "  --frames <a>-<b>       the range for --animation range (default: the\n"
@@ -129,6 +131,7 @@ struct CommonOptions {
     bool keepUnusedMaterials = false;
     bool keepCards = false;
     int maxTextureSize = -1;  // -1 = the recipe decides
+    double simplifyRatio = -1.0;  // -1 = the recipe decides
     std::string animation;  // empty = the recipe decides
     double frameStart = usdprep::kStageFrame;
     double frameEnd = usdprep::kStageFrame;
@@ -171,6 +174,7 @@ void ApplyCommon(const CommonOptions& common, const usdprep::Recipe& recipe,
     if (common.keepUnusedMaterials) options->stripUnusedMaterials = false;
     if (common.keepCards) options->stripDrawModeCards = false;
     if (common.maxTextureSize >= 0) options->maxTextureSize = common.maxTextureSize;
+    if (common.simplifyRatio >= 0.0) options->simplifyRatio = common.simplifyRatio;
     if (!common.animation.empty()) options->animation = common.animation;
     if (!std::isnan(common.frameStart)) options->frameStart = common.frameStart;
     if (!std::isnan(common.frameEnd)) options->frameEnd = common.frameEnd;
@@ -224,6 +228,13 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             if (++i >= args.size()) { error = "--max-texture needs a pixel count"; return -1; }
             common.maxTextureSize = static_cast<int>(std::strtol(args[i].c_str(), nullptr, 10));
             if (common.maxTextureSize < 0) { error = "--max-texture needs a pixel count (0 = no cap)"; return -1; }
+        } else if (a == "--simplify") {
+            if (++i >= args.size()) { error = "--simplify needs a ratio, e.g. 0.25"; return -1; }
+            common.simplifyRatio = std::strtod(args[i].c_str(), nullptr);
+            if (common.simplifyRatio < 0.0 || common.simplifyRatio >= 1.0) {
+                error = "--simplify needs a ratio between 0 (as is) and 1, e.g. 0.25";
+                return -1;
+            }
         } else if (a == "--animation") {
             if (++i >= args.size()) { error = "--animation needs all, range or static"; return -1; }
             common.animation = args[i];

@@ -63,6 +63,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         extractOptions.stripUnusedMaterials = options.stripUnusedMaterials;
         extractOptions.stripDrawModeCards = options.stripDrawModeCards;
         extractOptions.maxTextureSize = options.maxTextureSize;
+        extractOptions.simplifyRatio = options.simplifyRatio;
         extractOptions.animation = options.animation;
         extractOptions.frameStart = options.frameStart;
         extractOptions.frameEnd = options.frameEnd;
@@ -149,6 +150,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
     if (options.stripDrawModeCards) StripDrawModeCards(rep, flat);
     TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
                   options.staticFrame);
+    SimplifyMeshes(rep, flat, options.simplifyRatio);
 
     if (options.setDefaultPrim && !flat->GetDefaultPrim()) {
         // Prefer the input's own default prim when it survived the prune.
