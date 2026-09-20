@@ -114,17 +114,19 @@ std::string DialogResult(IFileDialog* dialog) {
 }
 
 // Native "Save as...". False = cancelled.
-bool NativeSaveDialog(const std::string& suggestedName, std::string& outPath) {
+bool NativeSaveDialog(const std::string& suggestedName, bool obj, std::string& outPath) {
     if (!EnsureCom()) return false;
     IFileSaveDialog* dialog = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER,
                                 IID_PPV_ARGS(&dialog)))) {
         return false;
     }
-    // One format: what Nuke reads.
-    const COMDLG_FILTERSPEC filters[] = {{L"USD for Nuke (*.usdc)", L"*.usdc"}};
-    dialog->SetFileTypes(1, filters);
-    dialog->SetDefaultExtension(L"usdc");
+    // Both formats Nuke was measured to read: USD, and .obj for its classic 3D.
+    const COMDLG_FILTERSPEC filters[] = {{L"USD for Nuke (*.usdc)", L"*.usdc"},
+                                         {L"OBJ for older Nuke (*.obj)", L"*.obj"}};
+    dialog->SetFileTypes(2, filters);
+    dialog->SetFileTypeIndex(obj ? 2 : 1);
+    dialog->SetDefaultExtension(obj ? L"obj" : L"usdc");
     const std::wstring suggested = Utf8ToWide(suggestedName);
     if (!suggested.empty()) dialog->SetFileName(suggested.c_str());
     const std::string result = DialogResult(dialog);
@@ -376,7 +378,7 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (dir.empty()) dir = ".";
         std::string name = targets.front().GetName();
         if (name.empty()) name = "asset";
-        const std::string suggested = dir + "/" + name + ".usdc";
+        const std::string suggested = dir + "/" + name + (_format == 1 ? ".obj" : ".usdc");
         std::snprintf(_outputPath, sizeof(_outputPath), "%s", suggested.c_str());
     }
 
@@ -394,9 +396,10 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         if (stem.empty() && !targets.empty()) stem = targets.front().GetName();
         if (stem.empty()) stem = "asset";
         std::string chosen;
-        if (NativeSaveDialog(stem + ".usdc", chosen)) {
+        if (NativeSaveDialog(stem + (_format == 1 ? ".obj" : ".usdc"), _format == 1, chosen)) {
             std::snprintf(_outputPath, sizeof(_outputPath), "%s", chosen.c_str());
             _pathEdited = true;
+            _format = (chosen.size() >= 4 && chosen.compare(chosen.size() - 4, 4, ".obj") == 0) ? 1 : 0;
         }
     }
 #else
@@ -405,15 +408,27 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
     ImGui::EndDisabled();
 #endif
 
-    // One format, the one Nuke renders with textures: a .usdc and its
-    // textures folder. Nothing Nuke cannot read is on offer here.
+    // Two formats, both measured in Nuke: USD for the current 3D system,
+    // .obj for the classic one - the only 3D an older Nuke has.
+    const char* formats[] = {
+        "USD (.usdc) - Nuke's current 3D system, materials and animation",
+        "OBJ (.obj) - older Nuke / classic 3D (ReadGeo): one still frame",
+    };
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::Combo("##format", &_format, formats, 2);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("A .usdc file with a \"%s_textures\" folder next to it - keep the two together.",
-                       OutputNameOf(_outputPath).c_str());
+    if (_format == 0) {
+        ImGui::TextWrapped("A .usdc file with a \"%s_textures\" folder next to it - keep the two together.",
+                           OutputNameOf(_outputPath).c_str());
+    } else {
+        ImGui::TextWrapped("An .obj, its textures folder and \"%s.nk\": in Nuke, File > Insert Comp Nodes "
+                           "brings the geometry with its textures wired in. No animation in an .obj.",
+                           OutputNameOf(_outputPath).c_str());
+    }
     ImGui::PopStyleColor();
-    // The extension is always .usdc - fixed up, but never while the artist is typing.
+    // The extension follows the format - fixed up, but never while the artist is typing.
     if (!editingPath && _outputPath[0] != '\0') {
-        const std::string synced = WithExtension(_outputPath, ".usdc");
+        const std::string synced = WithExtension(_outputPath, _format == 1 ? ".obj" : ".usdc");
         if (synced != _outputPath) std::snprintf(_outputPath, sizeof(_outputPath), "%s", synced.c_str());
     }
 }

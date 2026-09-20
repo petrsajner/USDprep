@@ -6,36 +6,86 @@
   "fbx": 62896
  },
  "read": {
-  "abc via GeoImport": {
-   "coverage": 0.84,
+  "sphere_nuke17.abc via classic": {
+   "f1": {
+    "coverage": 0.368
+   },
+   "f10": {
+    "coverage": 0.368
+   },
+   "tones": [
+    0.1,
+    0.4,
+    0.5,
+    0.6,
+    0.7,
+    0.8
+   ],
    "errors": []
   },
-  "abc via ReadGeo2": {
-   "coverage": 0.84,
+  "sphere_nuke17.abc via geoimport": {
+   "f1": {
+    "coverage": 0.368
+   },
+   "f10": {
+    "coverage": 0.368
+   },
+   "tones": null,
    "errors": []
   },
-  "abc via ReadGeo": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke17_abc_ReadGeo.png: has no valid channels - nothing to write."
-  },
-  "obj via GeoImport": {
-   "coverage": 0.0,
+  "sphere_nuke17.fbx via classic": {
+   "f1": {
+    "coverage": 0.368
+   },
+   "f10": {
+    "coverage": 0.368
+   },
+   "tones": [
+    0.1,
+    0.4,
+    0.5,
+    0.6,
+    0.7,
+    0.8
+   ],
    "errors": []
   },
-  "obj via ReadGeo2": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke17_obj_ReadGeo2.png: has no valid channels - nothing to write."
-  },
-  "obj via ReadGeo": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke17_obj_ReadGeo.png: has no valid channels - nothing to write."
-  },
-  "fbx via GeoImport": {
-   "coverage": 0.0,
+  "sphere_nuke17.fbx via geoimport": {
+   "f1": {
+    "coverage": 0.0
+   },
+   "f10": {
+    "coverage": 0.0
+   },
+   "tones": null,
    "errors": []
   },
-  "fbx via ReadGeo2": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke17_fbx_ReadGeo2.png: has no valid channels - nothing to write."
+  "sphere_nuke17.obj via classic": {
+   "f1": {
+    "coverage": 0.368
+   },
+   "f10": {
+    "coverage": 0.368
+   },
+   "tones": [
+    0.1,
+    0.4,
+    0.5,
+    0.6,
+    0.7,
+    0.8
+   ],
+   "errors": []
   },
-  "fbx via ReadGeo": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke17_fbx_ReadGeo.png: has no valid channels - nothing to write."
+  "sphere_nuke17.obj via geoimport": {
+   "f1": {
+    "coverage": 0.0
+   },
+   "f10": {
+    "coverage": 0.0
+   },
+   "tones": null,
+   "errors": []
   }
  }
 }

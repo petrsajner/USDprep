@@ -883,7 +883,7 @@ inline void NukeReadability(Report& rep, const std::string& tmpPath, const std::
 // Returns true when the output file was produced; false means "not needed
 // or not possible", and the caller falls back to a plain rename.
 inline bool RelinkDependencies(Report& rep, const std::string& outputPath,
-                               const std::string& tmpPath) {
+                               const std::string& tmpPath, const std::string& sidecarStem) {
     namespace fs = std::filesystem;
     std::error_code ec;
 
@@ -901,7 +901,7 @@ inline bool RelinkDependencies(Report& rep, const std::string& outputPath,
     const fs::path output(outputPath);
     fs::path outputDir = output.parent_path();
     if (outputDir.empty()) outputDir = ".";
-    const std::string sidecarName = output.stem().string() + "_textures";
+    const std::string sidecarName = sidecarStem + "_textures";
     const fs::path sidecarDir = outputDir / sidecarName;
 
     const bool sidecarExisted = fs::exists(sidecarDir, ec);
@@ -951,13 +951,23 @@ inline bool RelinkDependencies(Report& rep, const std::string& outputPath,
     return true;
 }
 
+// MeshExport.cpp: the prepared .usdc written out as an .obj (plus a .nk
+// that wires the textures in) for Nuke's classic 3D; a still of `frame`.
+bool ExportObj(Report& rep, const std::string& usdPath, const std::string& objPath, double frame);
+
 // Shared tail: turn the flattened temp file into the requested output
 // (rename, or localize into a .usdz package), then gather after-numbers.
-inline void FinalizeOutput(Report& rep, const std::string& outputPath,
+// An .obj output is made from the finished .usdc, which is then removed.
+inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
                            const std::string& tmpPath, bool relinkTextures,
-                           int maxTextureSize) {
+                           int maxTextureSize, double frame) {
     namespace fs = std::filesystem;
     std::error_code ec;
+    const bool asObj = HasExtension(requestedPath, ".obj");
+    const fs::path requested(requestedPath);
+    const std::string outputPath =
+        asObj ? (requested.parent_path() / (requested.stem().string() + ".usdprep-source.usdc")).string()
+              : requestedPath;
 
     DropMissingDependencies(rep, tmpPath);
     CapTextures(rep, tmpPath, maxTextureSize);
@@ -972,7 +982,7 @@ inline void FinalizeOutput(Report& rep, const std::string& outputPath,
                  "flattened layer and localized dependencies (incl. UDIM "
                  "textures) packaged into " + outputPath);
         fs::remove(tmpPath, ec);
-    } else if (!relinkTextures || !RelinkDependencies(rep, outputPath, tmpPath)) {
+    } else if (!relinkTextures || !RelinkDependencies(rep, outputPath, tmpPath, requested.stem().string())) {
         if (!rep.error.empty()) return;
         fs::rename(tmpPath, outputPath, ec);
         if (ec) {
@@ -989,9 +999,14 @@ inline void FinalizeOutput(Report& rep, const std::string& outputPath,
     } else {
         rep.after = info.counts;
     }
+    if (asObj) {
+        const bool written = ExportObj(rep, outputPath, requestedPath, frame);
+        fs::remove(outputPath, ec);
+        if (!written) return;
+    }
     rep.outputSizeBytes =
-        fs::exists(outputPath, ec) ? fs::file_size(outputPath, ec) : 0;
-    fs::remove_all(TempDirFor(outputPath), ec);
+        fs::exists(requestedPath, ec) ? fs::file_size(requestedPath, ec) : 0;
+    fs::remove_all(TempDirFor(requestedPath), ec);
     rep.ok = true;
 }
 

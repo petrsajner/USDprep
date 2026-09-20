@@ -82,6 +82,15 @@ meshes. `--as-is` skips these conversions, `--keep-udim` the atlas. Other
 applications are served by stock usdtweak or by building on
 `usdprep-core`, which still packages.
 
+**Older Nuke (classic 3D).** `-o car.obj` writes what the classic ReadGeo
+reads: a still in world space (`--frame` picks it) with UVs, the textures
+folder, one `.obj` per material in `car_parts/` when there are several,
+and `car.nk` - File > Insert Comp Nodes brings ReadGeo nodes with their
+textures wired in and a Scene joining them (Nuke reads no materials from
+an `.obj`). Everything the USD export does applies first: one material
+per mesh, skinning baked, shapes meshed, UDIM atlases with their UVs
+baked into the file.
+
 **Textures.** They are copied into a `<name>_textures` folder next to the
 file, and the file points at the copies (single-tile UDIM sets become the
 tile itself) — keep the two together, or pass `--no-relink` to leave the

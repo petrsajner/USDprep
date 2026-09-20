@@ -101,7 +101,8 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     }
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
-                   options.maxTextureSize);
+                   options.maxTextureSize,
+                   options.animation == "static" ? options.staticFrame : kStageFrame);
 }
 
 }  // namespace

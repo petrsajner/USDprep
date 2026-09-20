@@ -187,7 +187,8 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
     flat->Save();
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
-                   options.maxTextureSize);
+                   options.maxTextureSize,
+                   options.animation == "static" ? options.staticFrame : kStageFrame);
 }
 
 }  // namespace

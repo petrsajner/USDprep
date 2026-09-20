@@ -3,7 +3,7 @@
 # each is read back through GeoImport (the USD-based 3D system) and through
 # the classic ReadGeo, rendered and measured.
 #   "<Nuke>.exe" -t -i tools/nuke/probe_formats.py      USDPREP_PROBES, USDPREP_TAG as in run_probes.py
-import json, os, traceback
+import glob, json, os, traceback
 import nuke
 
 PROBES = os.environ["USDPREP_PROBES"].replace("\\", "/")
@@ -25,7 +25,6 @@ def make(names):
 
 
 def coverage(node):
-    nuke.frame(1)
     hits = 0
     for j in range(GRID):
         for i in range(GRID):
@@ -51,28 +50,64 @@ for ext in ("abc", "obj", "fbx"):
     except Exception as e:
         results["written"][ext] = "failed: %s" % e
 
-# ---- read each back, both ways
-for ext in ("abc", "obj", "fbx"):
-    target = "%s/sphere_%s.%s" % (OUT, TAG, ext)
-    if not os.path.exists(target):
+# ---- read each back: through GeoImport (the USD-based 3D system) and
+#      through the classic ReadGeo + ScanlineRender, the only 3D there is
+#      in older Nukes. The classic rig gets a checkerboard as the texture,
+#      so a picture with two tones in it means the UVs arrived as well.
+def classic_reader(path):
+    reader = nuke.createNode("ReadGeo2", inpanel=False)
+    reader["file"].setValue(path)
+    # (an .abc created from a script loads all its items; touching scene_view here unloads them)
+    if path.endswith(".fbx") and "all_objects" in reader.knobs():
+        reader["all_objects"].setValue(True)  # .fbx: every object, not the first one
+    return reader
+
+
+def tones(node):
+    nuke.frame(1)
+    values = set()
+    for j in range(GRID):
+        for i in range(GRID):
+            x, y = (i + 0.5) * SIZE / GRID, (j + 0.5) * SIZE / GRID
+            if node.sample("alpha", x, y) > 0.5:
+                values.add(round(node.sample("red", x, y), 1))
+    return sorted(values)
+
+
+for path in sorted(glob.glob(OUT + "/*.abc") + glob.glob(OUT + "/*.obj") + glob.glob(OUT + "/*.fbx")):
+    path = path.replace("\\", "/")
+    name = os.path.basename(path)
+    if name.startswith("sphere_") and TAG not in name:
         continue
-    for reader_class, render_classes in (("GeoImport", ["ScanlineRender2"]), ("ReadGeo2", ["ScanlineRender"]),
-                                         ("ReadGeo", ["ScanlineRender"])):
-        key = "%s via %s" % (ext, reader_class)
+    for system in ("classic", "geoimport"):
+        key = "%s via %s" % (name, system)
         nodes = []
         try:
-            reader = nuke.createNode(reader_class, inpanel=False); nodes.append(reader)
-            reader["file"].setValue(target)
-            cam = make(["Camera4"] if reader_class == "GeoImport" else ["Camera2", "Camera3", "Camera"]); nodes.append(cam)
-            cam["translate"].setValue([0, 0, 4])
-            ren = make(render_classes); nodes.append(ren)
+            if system == "classic":
+                checker = nuke.createNode("CheckerBoard2", inpanel=False); nodes.append(checker)
+                reader = classic_reader(path); nodes.append(reader)
+                reader.setInput(0, checker)
+                cam = nuke.createNode("Camera2", inpanel=False); nodes.append(cam)
+                ren = nuke.createNode("ScanlineRender", inpanel=False); nodes.append(ren)
+            else:
+                reader = nuke.createNode("GeoImport", inpanel=False); nodes.append(reader)
+                reader["file"].setValue(path)
+                cam = nuke.createNode("Camera4", inpanel=False); nodes.append(cam)
+                ren = nuke.createNode("ScanlineRender2", inpanel=False); nodes.append(ren)
+            cam["translate"].setValue([0, 0, 6])
             ren.setInput(1, reader); ren.setInput(2, cam)
             w = nuke.createNode("Write", inpanel=False); nodes.append(w)
             w.setInput(0, ren)
-            w["file"].setValue("%s/%s_%s_%s.png" % (OUT, TAG, ext, reader_class)); w["file_type"].setValue("png")
-            nuke.execute(w, 1, 1)
-            results["read"][key] = {"coverage": coverage(ren),
-                                    "errors": [n.name() + ": " + n.error() for n in nodes if n.hasError()]}
+            w["channels"].setValue("rgba")
+            w["file"].setValue("%s/%s_%s_%s.####.png" % (OUT, TAG, name.replace(".", "_"), system)); w["file_type"].setValue("png")
+            entry = {}
+            for frame in (1, 10):
+                nuke.execute(w, frame, frame)
+                nuke.frame(frame)
+                entry["f%d" % frame] = {"coverage": coverage(ren)}
+            entry["tones"] = tones(ren) if system == "classic" else None
+            entry["errors"] = [n.name() + ": " + n.error() for n in nodes if n.hasError()]
+            results["read"][key] = entry
         except Exception as e:
             results["read"][key] = {"exception": str(e)[:200]}
         for n in reversed(nodes):

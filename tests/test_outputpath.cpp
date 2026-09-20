@@ -50,6 +50,12 @@ int main() {
         Expect(ExportBlocker(true, here), "", "an existing folder is fine");
     }
 
+    // --- the classic-3D format switches the extension both ways ---
+    Expect(WithExtension("C:/out/car.usdc", ".obj"), "C:/out/car.obj", "usdc becomes obj");
+    Expect(WithExtension("C:/out/car.obj", ".usdc"), "C:/out/car.usdc", "obj becomes usdc");
+    Expect(WithExtension(".obj", ".obj"), ".obj", "a bare .obj is not doubled");
+    Expect(OutputNameOf("C:/out/car.obj"), "car", "the name of an .obj");
+
     if (failures == 0) std::printf("test_outputpath: OK\n");
     return failures == 0 ? 0 : 1;
 }

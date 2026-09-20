@@ -44,7 +44,7 @@ void PrintUsage() {
         << "usdcut " << USDPREP_VERSION_STRING
         << " — prepare USD scenes for compositing (USD " << UsdVersionString() << ")\n\n"
         << "usage:\n"
-        << "  usdcut extract <scene> <prim-path>... -o <out.usdc|usda> [options]\n"
+        << "  usdcut extract <scene> <prim-path>... -o <out.usdc|usda|obj> [options]\n"
         << "  usdcut prune   <scene> (--except <paths> | --drop <paths> |\n"
         << "                          --drop-type <types> | --drop-purpose <purposes>)\n"
         << "                         -o <out> [options]\n"
@@ -54,7 +54,8 @@ void PrintUsage() {
         << "  usdcut presets [<name>]   list the built-in recipes, or print one\n"
         << "  usdcut version | help\n\n"
         << "common options:\n"
-        << "  -o, --output <path>    output file (.usdc or .usda)\n"
+        << "  -o, --output <path>    output file: .usdc / .usda, or .obj for Nuke's\n"
+        << "                         classic 3D (a still, with a .nk that wires textures in)\n"
         << "  --preset <name>        start from a built-in recipe (usdcut presets)\n"
         << "  --recipe <file.json>   start from a recipe file; later flags win\n"
         << "  --report <file.json>   write the operation report as JSON\n"

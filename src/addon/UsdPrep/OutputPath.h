@@ -31,9 +31,16 @@ inline bool HasUsdExtension(const std::string& path) {
             path.compare(path.size() - 5, 5, ".usda") == 0);
 }
 
+// Length of the extension when it is one of ours (.usdc/.usda/.usdz, .obj), else 0.
+inline size_t KnownExtensionLength(const std::string& path) {
+    if (HasUsdExtension(path)) return 5;
+    if (path.size() >= 4 && path.compare(path.size() - 4, 4, ".obj") == 0) return 4;
+    return 0;
+}
+
 inline std::string WithExtension(const std::string& path, const char* ext) {
     std::string p = path;
-    if (HasUsdExtension(p)) p.resize(p.size() - 5);
+    p.resize(p.size() - KnownExtensionLength(p));
     return p + ext;
 }
 
@@ -41,7 +48,7 @@ inline std::string WithExtension(const std::string& path, const char* ext) {
 // Empty means the artist has not named it yet.
 inline std::string OutputNameOf(const std::string& path) {
     std::string name = BasenameOf(path);
-    if (HasUsdExtension(name)) name.resize(name.size() - 5);
+    name.resize(name.size() - KnownExtensionLength(name));
     return name;
 }
 

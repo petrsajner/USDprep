@@ -98,17 +98,35 @@ Not measured: compressed / half-float / EXR-based `.tx` as a renderer's
 maketx would write them (no working maketx on this machine), and
 RenderMan's `.tex`, which is a different format altogether.
 
+**Correction after a second look:** the classic rig of that probe was
+wired wrong. Through the classic `ReadGeo` + `ScanlineRender` - the only
+3D an older Nuke has - **`.abc`, `.obj` and `.fbx` are all read, UVs
+included** (a checkerboard fed into ReadGeo shows on the sphere), in 16.1
+and in 17.0 alike. Two traps for scripts: a ReadGeo's `all_objects` knob
+belongs to `.fbx` only (set on an `.abc` it empties the node), and
+`scene_view` is best left alone.
+
 What follows for the plan:
 
 - **OpenImageIO is not needed to get `.tx` into Nuke** - Nuke reads it.
   It would only be needed for *us* to open such textures (the resolution
   cap and the UDIM atlas skip what Hio cannot read, and say so), and for
   `.tex`.
-- **Level 3 (export to .abc / .fbx / .obj) has lost its reason**: the
-  floor is Nuke 16, whose 3D system reads our `.usdc` natively and with
-  materials; `.abc` would carry less, `.obj`/`.fbx` are not read by that
-  system at all. Under "offer only what Nuke reads" they stay out, and
-  the Alembic build of USD with them.
+- **`.obj` / `.abc` / `.fbx` are the way into an older Nuke** (classic 3D
+  only), which does not read USD the way 14+ does. They carry geometry
+  and UVs; Nuke reads no materials from any of them, so the textures come
+  through a generated `.nk`.
+  - `.obj` - **done** (`src/core/src/MeshExport.cpp`): a still in world
+    space, one file per material next to the complete one, and a `.nk`
+    with ReadGeo nodes, textures wired in, joined by a Scene. Loaded with
+    `nuke.scriptReadFile` and rendered through the classic ScanlineRender
+    in 16.1 and 17.0 (`tools/nuke/probe_nk.py`): ALab's projector comes up
+    textured, per-material colours arrive, UDIM-atlas UVs are baked into
+    the file.
+  - `.abc` - the one that carries **animation**; needs the Alembic
+    library.
+  - `.fbx` - needs Autodesk's FBX SDK (proprietary) or a hand-written
+    ASCII writer; adds nothing over `.obj` + `.abc` for Nuke.
 
 ## What the tool does about it
 
