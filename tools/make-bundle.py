@@ -95,8 +95,14 @@ def main():
     shutil.copy2(os.path.join(ROOT, "LICENSE"), os.path.join(bundle, "LICENSE.txt"))
     shutil.copy2(os.path.join(ROOT, "NOTICE"), os.path.join(bundle, "NOTICE.txt"))
     # the user manual is rebuilt for this version and goes along
-    subprocess.run([sys.executable, os.path.join(ROOT, "tools", "make-manual.py")], check=True)
-    shutil.copy2(os.path.join(ROOT, "docs", "manual", "USDprep_User_Manual.pdf"), bundle)
+    manual = os.path.join(ROOT, "docs", "manual", "USDprep_User_Manual.pdf")
+    built = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "make-manual.py")], capture_output=True)
+    if built.returncode != 0:
+        # needs reportlab; a python without it (the USD environment's) ships the last manual built
+        if not os.path.exists(manual):
+            sys.exit("the manual could not be built (pip install reportlab) and there is none from before")
+        print("manual : NOT rebuilt (this python has no reportlab) - shipping the existing PDF")
+    shutil.copy2(manual, bundle)
     shutil.copytree(os.path.join(ENV, "Library", "bin", "usd"), os.path.join(bin_dir, "usd"))
     shutil.copytree(plugin_src, os.path.join(bundle, "plugin", "usd"),
                     ignore=shutil.ignore_patterns("*.lib", "*.pdb"))
