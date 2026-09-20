@@ -68,14 +68,19 @@ is the shipped answer to "give me something I can drop into a comp";
 `--recipe my.json` reads your own (start it from a preset and override the
 two lines you care about). Flags you type win over the recipe.
 
-**Only what Nuke reads.** The tool offers nothing Nuke cannot load. The
-output is a `.usdc` (or `.usda`); a `.usdz` is refused, because Nuke 17
-loads a package's geometry and none of its textures. Nuke does not expand
-`<UDIM>` either and renders such a material black - so every multi-tile
-UDIM set is stitched into one atlas texture, with a `UsdTransform2d` in
-the material squeezing the UVs into it (meshes untouched; the texture cap
-applies per tile; `--keep-udim` leaves the sets alone). Other applications are served by stock usdtweak or by
-building on `usdprep-core`, which still packages.
+**Only what Nuke reads.** What Nuke 16 and 17 read was measured with 67
+probe scenes (`NUKE_COMPAT.md`), and the tool offers nothing they cannot
+load. The output is a `.usdc` (or `.usda`); a `.usdz` is refused — Nuke
+loads a package's geometry and none of its textures. What causes trouble
+is off by default and behind a switch; switched on, it is converted or
+replaced and named in the report, never dropped silently: UDIM sets
+become one atlas texture, lights Nuke cannot use become axes of the same
+name (`--lights` brings lights along at all), kept guide/proxy geometry is
+hidden, skinning is baked to point caches, Z-up scenes are stood up,
+per-face materials become one mesh per material, implicit shapes become
+meshes. `--as-is` skips these conversions, `--keep-udim` the atlas. Other
+applications are served by stock usdtweak or by building on
+`usdprep-core`, which still packages.
 
 **Textures.** They are copied into a `<name>_textures` folder next to the
 file, and the file points at the copies (single-tile UDIM sets become the

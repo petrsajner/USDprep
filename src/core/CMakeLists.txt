@@ -11,6 +11,7 @@ add_library(usdprep-core
     src/Simplify.cpp
     src/UdimAtlas.cpp
     src/NukeCompat.cpp
+    src/NukeGeometry.cpp
     src/StageInfo.cpp
 )
 add_library(usdprep::core ALIAS usdprep-core)

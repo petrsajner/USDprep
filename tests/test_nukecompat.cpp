@@ -7,7 +7,9 @@
 
 #include <pxr/usd/usd/attribute.h>
 #include <pxr/usd/usd/prim.h>
+#include <pxr/usd/usd/relationship.h>
 #include <pxr/usd/usd/stage.h>
+#include <pxr/base/gf/vec2f.h>
 #include <pxr/base/gf/vec3f.h>
 #include <pxr/base/vt/array.h>
 #include <pxr/usd/usdGeom/bboxCache.h>
@@ -169,6 +171,60 @@ int main() {
         options.nukeCompat = false;
         CHECK(usdprep::ExtractPrims(FIXTURE_DIR "/zup_scene.usda", options).ok);
         CHECK(pxr::UsdGeomGetStageUpAxis(pxr::UsdStage::Open(options.outputPath)) == pxr::UsdGeomTokens->z);
+    }
+
+    // --- per-face materials: the mesh becomes a group, each material a
+    //     mesh of the subset's name; implicit shapes become meshes ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "subsets.usdc").string();
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/subsets_scene.usda", options);
+        CHECK(rep.ok);
+        const pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(options.outputPath);
+        const pxr::UsdPrim group = stage->GetPrimAtPath(pxr::SdfPath("/Root/Strip"));
+        CHECK(group.GetTypeName() == "Xform");
+        CHECK(group.GetAttribute(pxr::TfToken("xformOp:translate")).HasAuthoredValue());  // the transform stays on the group
+        CHECK(!group.GetAttribute(pxr::TfToken("points")).HasAuthoredValue());
+
+        const pxr::UsdPrim red = stage->GetPrimAtPath(pxr::SdfPath("/Root/Strip/RedFaces"));
+        const pxr::UsdPrim green = stage->GetPrimAtPath(pxr::SdfPath("/Root/Strip/GreenFaces"));
+        const pxr::UsdPrim rest = stage->GetPrimAtPath(pxr::SdfPath("/Root/Strip/Strip_rest"));
+        CHECK(red.GetTypeName() == "Mesh" && green.GetTypeName() == "Mesh" && rest.GetTypeName() == "Mesh");
+        pxr::SdfPathVector targets;
+        green.GetRelationship(pxr::TfToken("material:binding")).GetTargets(&targets);
+        CHECK(targets.size() == 1 && targets[0] == pxr::SdfPath("/Root/Looks/Green"));
+        CHECK(!rest.GetRelationship(pxr::TfToken("material:binding")));  // inherits Base from the group
+
+        // the green part: one face, four points of its own, its UVs, its id - in both time samples
+        pxr::VtIntArray counts, indices, ids;
+        pxr::VtArray<pxr::GfVec3f> points;
+        pxr::VtArray<pxr::GfVec2f> st;
+        green.GetAttribute(pxr::TfToken("faceVertexCounts")).Get(&counts);
+        green.GetAttribute(pxr::TfToken("faceVertexIndices")).Get(&indices);
+        green.GetAttribute(pxr::TfToken("primvars:id")).Get(&ids);
+        green.GetAttribute(pxr::TfToken("primvars:st")).Get(&st);
+        CHECK(counts == pxr::VtIntArray({4}));
+        CHECK(indices == pxr::VtIntArray({0, 1, 2, 3}));
+        CHECK(ids == pxr::VtIntArray({12}));
+        CHECK(st.size() == 4 && st[0] == pxr::GfVec2f(0.8f, 0.0f));
+        const pxr::UsdAttribute greenPoints = green.GetAttribute(pxr::TfToken("points"));
+        CHECK(greenPoints.GetNumTimeSamples() == 2);
+        CHECK(greenPoints.Get(&points, 2.0) && points.size() == 4 && points[0] == pxr::GfVec3f(2, 0, 1));
+        CHECK(Reported(rep, "per-face materials split into 3 meshes"));
+
+        const pxr::UsdPrim ball = stage->GetPrimAtPath(pxr::SdfPath("/Root/Ball"));
+        CHECK(ball.GetTypeName() == "Mesh");
+        pxr::VtArray<pxr::GfVec3f> extent;
+        CHECK(ball.GetAttribute(pxr::TfToken("extent")).Get(&extent) && extent.size() == 2 && extent[1][0] > 1.9f);
+        CHECK(Reported(rep, "/Root/Ball (Sphere)"));
+
+        options.outputPath = (outDir / "subsets_asis.usdc").string();
+        options.nukeCompat = false;
+        CHECK(usdprep::ExtractPrims(FIXTURE_DIR "/subsets_scene.usda", options).ok);
+        const pxr::UsdStageRefPtr asIs = pxr::UsdStage::Open(options.outputPath);
+        CHECK(asIs->GetPrimAtPath(pxr::SdfPath("/Root/Strip")).GetTypeName() == "Mesh");
+        CHECK(asIs->GetPrimAtPath(pxr::SdfPath("/Root/Ball")).GetTypeName() == "Sphere");
     }
 
     // --- the presets ---

@@ -81,37 +81,42 @@ column is enough.
 | RectLight, CylinderLight | ignored altogether | |
 | Camera in the file | ✅ through the Camera node's import (translate, focal) | |
 
-## What this means for the tool
+## What the tool does about it
 
-Already right: `.usdc` only, the UDIM atlas, single-tile rewrite,
-binding the chosen material for every purpose.
+The rule (Petr, 2026-09-20): stay as close as possible to what a 3D
+application shows for the same file. What causes trouble in Nuke is **off
+by default, behind a switch**; switched on, the tool converts or replaces
+it with the closest thing Nuke reads, and **every substitution is named in
+the report**. Nothing is thrown away silently.
 
-Gaps, in the order they bite:
+All of it lives in one pass after the recipe (`nukeCompat`, on in the
+nuke preset, off in raw/"Original", `--as-is` on the CLI;
+`src/core/src/NukeCompat.cpp`, `NukeGeometry.cpp`, `UdimAtlas.cpp`). Each
+row was re-rendered in Nuke 16.1 and 17.0 after the conversion.
 
-1. **Guide/proxy geometry and renderer material outputs must go, always.**
-   Today they are switches a user can turn off; turned off, Nuke shows the
-   asset doubled, or black. They belong with the atlas: not a choice in
-   the panel.
-2. **A material with nothing Nuke can render makes the mesh vanish.**
-   After the strip, such a material should be unbound (the mesh then
-   shows its displayColor or grey) and named in the report.
-3. **UsdSkel** — characters that arrive skinned stand in their bind pose.
-   USD ships `UsdSkelBakeSkinning`; baking to a point cache on export
-   makes them move.
-4. **GeomSubset materials** — one mesh, several materials: Nuke shows
-   grey. Fix: split the mesh by its material subsets.
-5. **`upAxis = Z`** scenes (Houdini, Blender, 3ds Max pipelines) arrive
-   lying down. Fix: rotate the root and declare Y.
-6. **Implicit shapes** and **BasisCurves** are not drawn. Shapes can be
-   meshed on export; curves can only be reported (or tubed — expensive).
-7. **Lights**: a file's lights switch Nuke's unlit default off, and a
-   DistantLight alone renders black. For "drop it into a comp" the nuke
-   preset should leave lights out by default (the option exists:
-   drop type `light`); cameras are fine and worth keeping.
-8. **De-instancing is not needed for Nuke** and is the size trap on big
-   sets; it could default to off when nothing inside an instance has to
-   be edited (strip/atlas inside prototypes needs a look first).
+| Nuke cannot read | Default | If kept | Verified |
+|---|---|---|---|
+| `.usdz` textures | output is `.usdc` + textures folder | — | ✅ |
+| `<UDIM>` sets | stitched into an atlas, `UsdTransform2d` in the material | — | ✅ |
+| lights (any light switches Nuke's unlit default off) | **left out** ("Include lights" / `--lights`) | sphere, disk and dome lights stay lights; distant, rect, cylinder and the rest become **axes of the same name**, position and settings still on them | ✅ |
+| guide / proxy geometry (drawn on top of the real thing) | removed | kept in the file but **hidden** | ✅ |
+| MaterialX output next to a standard surface (renders black) | removed with the renderer outputs | the MaterialX output alone is removed | ✅ |
+| material with no standard surface (the mesh disappears) | — | the mesh is **unbound** and shows its display colour; the material stays | ✅ |
+| `material:binding:preview` alone (ignored) | the chosen material is bound for every purpose | | ✅ |
+| UsdSkel (bind pose) | skinning **baked into point caches**, SkelRoot becomes an Xform | | ✅ |
+| `upAxis = Z` | top-level prims get `xformOp:rotateX:usdprepYUp = -90`, the stage says Y | | ✅ |
+| per-face materials (GeomSubset) | the mesh becomes a **group of the same name**, each material subset a mesh of the subset's name inside it (faces in no subset: `<mesh>_rest`); UVs, per-face and per-vertex data and animation follow | | ✅ |
+| Sphere, Cube, Cylinder, Cone, Capsule | turned into meshes (USD's own tessellation, 32 segments) | | ✅ |
+| BasisCurves | **reported only** — no faithful cheap substitute (ALab's stoat: 33 whisker curves) | | — |
 
-Not probed yet: normal/roughness/metallic maps (they need a lit render to
-judge), `.tx/.tex` textures, texture colour spaces, volumes, NURBS,
-blend shapes, nested instancing with material overrides.
+Still open:
+
+- **De-instancing is not needed for Nuke** and is the size trap on big
+  sets; it could default to off when nothing inside an instance has to be
+  edited (strip/atlas/compat inside prototypes needs a look first).
+- Curves as tubes or cards, if a show needs hair or wires in comp.
+- Baking skinning evaluates the whole animation before the trim cuts it;
+  fine for shots, slow for very long takes.
+- Not probed yet: normal/roughness/metallic maps (they need a lit render
+  to judge), `.tx/.tex` textures, texture colour spaces, volumes, NURBS,
+  blend shapes, nested instancing with material overrides.

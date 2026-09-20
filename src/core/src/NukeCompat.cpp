@@ -19,6 +19,9 @@
 namespace usdprep {
 namespace detail {
 
+// NukeGeometry.cpp: per-face materials, implicit shapes, curves.
+void MakeGeometryNukeReadable(Report& rep, const UsdStageRefPtr& flat);
+
 namespace {
 
 // At most `limit` names, then "and N more".
@@ -208,7 +211,8 @@ void ConvertToYUp(Report& rep, const UsdStageRefPtr& flat) {
 }  // namespace
 
 void MakeNukeReadable(Report& rep, const UsdStageRefPtr& flat) {
-    BakeSkinning(rep, flat);
+    BakeSkinning(rep, flat);  // first: the split below copies the baked points
+    MakeGeometryNukeReadable(rep, flat);
     ConvertToYUp(rep, flat);
     HideGuidesAndProxies(rep, flat);
     MakeMaterialsRenderable(rep, flat);
