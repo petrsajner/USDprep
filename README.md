@@ -3,6 +3,25 @@
 By **Petr Sajner**. Apache License 2.0. Built on
 [usdtweak](https://github.com/cpichard/usdtweak) by Cyril Pichard.
 
+![USDprep: a character selected in the 3D view, three objects in the export list](docs/images/usdprep.png)
+
+CG departments deliver USD scenes built for their own renderers. A
+compositor who needs one prop or one character from such a scene in Nuke
+usually cannot get it: Nuke is strict about the USD it understands.
+**USDprep closes that gap** - open the scene, click the object in the 3D
+view, press Export, and read the result in Nuke with its materials,
+textures and animation. Every conversion is based on what Nuke 16.1 and
+17.0 were *measured* to read ([NUKE_COMPAT.md](NUKE_COMPAT.md)), and each
+one is named in the export report.
+
+- **Download:** the installer is on the [Releases](https://github.com/petrsajner/USDprep/releases) page
+  (Windows, per-user, no admin rights, nothing else to install).
+- **User manual:** [docs/manual/USDprep_User_Manual.pdf](docs/manual/USDprep_User_Manual.pdf)
+- **Thanks** to Cyril Pichard for usdtweak - the viewport, the editor and
+  the add-on mechanism underneath are his work.
+
+The rest of this file is for developers.
+
 Small, focused utility that turns heavy production USD scenes from CG into
 light, Nuke-friendly assets: extract one object, prune the rest, flatten,
 package. GUI (usdtweak addon) planned on top of the same core; the CLI is

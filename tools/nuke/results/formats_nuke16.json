@@ -15,27 +15,27 @@
    "errors": []
   },
   "abc via ReadGeo": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke16_abc_ReadGeo.png: has no valid channels - nothing to write."
+   "exception": "Write1: testdata/out/nuke_probes/formats/nuke16_abc_ReadGeo.png: has no valid channels - nothing to write."
   },
   "obj via GeoImport": {
    "coverage": 0.0,
    "errors": []
   },
   "obj via ReadGeo2": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke16_obj_ReadGeo2.png: has no valid channels - nothing to write."
+   "exception": "Write1: testdata/out/nuke_probes/formats/nuke16_obj_ReadGeo2.png: has no valid channels - nothing to write."
   },
   "obj via ReadGeo": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke16_obj_ReadGeo.png: has no valid channels - nothing to write."
+   "exception": "Write1: testdata/out/nuke_probes/formats/nuke16_obj_ReadGeo.png: has no valid channels - nothing to write."
   },
   "fbx via GeoImport": {
    "coverage": 0.0,
    "errors": []
   },
   "fbx via ReadGeo2": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke16_fbx_ReadGeo2.png: has no valid channels - nothing to write."
+   "exception": "Write1: testdata/out/nuke_probes/formats/nuke16_fbx_ReadGeo2.png: has no valid channels - nothing to write."
   },
   "fbx via ReadGeo": {
-   "exception": "Write1: C:/Users/Petr/Documents/USD/testdata/out/nuke_probes/formats/nuke16_fbx_ReadGeo.png: has no valid channels - nothing to write."
+   "exception": "Write1: testdata/out/nuke_probes/formats/nuke16_fbx_ReadGeo.png: has no valid channels - nothing to write."
   }
  }
 }

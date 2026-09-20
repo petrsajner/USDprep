@@ -6,7 +6,7 @@
 # Results land in <folder>/renders/ as PNGs plus render_results.json.
 import nuke, os, time, glob, json, math
 from pxr import Usd, UsdGeom, Gf
-MATRIX = os.environ.get("USDPREP_MATRIX", "C:/Users/Petr/Documents/USD/testdata/out/nuke_matrix")
+MATRIX = os.environ.get("USDPREP_MATRIX", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "testdata", "out", "nuke_matrix"))
 RENDERS = os.path.join(MATRIX, "renders"); os.makedirs(RENDERS, exist_ok=True)
 
 def make(cls):
