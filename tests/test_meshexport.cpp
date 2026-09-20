@@ -64,12 +64,12 @@ int main() {
         CHECK(Count(obj, "\ng ") == 4);  // Red, Base, Green and the ball without a material
         CHECK(obj.find("\nvt 0.8 0\n") != std::string::npos);  // the green face kept its UVs
         // one file per material, and the script that loads them
-        CHECK(fs::exists(outDir / "strip_parts" / "Red.obj"));
-        CHECK(fs::exists(outDir / "strip_parts" / "Green.obj"));
-        CHECK(Count(Slurp(outDir / "strip_parts" / "Red.obj"), "\nf ") == 1);
-        const std::string nk = Slurp(outDir / "strip.nk");
+        CHECK(fs::exists(outDir / "strip_obj_parts" / "Red.obj"));
+        CHECK(fs::exists(outDir / "strip_obj_parts" / "Green.obj"));
+        CHECK(Count(Slurp(outDir / "strip_obj_parts" / "Red.obj"), "\nf ") == 1);
+        const std::string nk = Slurp(outDir / "strip_obj.nk");
         CHECK(Count(nk, "ReadGeo2 {") == 4);
-        CHECK(nk.find("strip_parts/Green.obj") != std::string::npos);
+        CHECK(nk.find("strip_obj_parts/Green.obj") != std::string::npos);
         CHECK(nk.find("Scene {\n inputs 4") != std::string::npos);
         CHECK(nk.find("color {0.05 0.9 0.05 1}") != std::string::npos);  // no texture: the material's colour
         // the .usdc it was made from does not stay behind
@@ -87,11 +87,11 @@ int main() {
         CHECK(rep.ok);
         const std::string obj = Slurp(outDir / "atlas.obj");
         CHECK(obj.find("\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n") != std::string::npos);  // was (1,0) .. (3,2)
-        const std::string nk = Slurp(outDir / "atlas.nk");
+        const std::string nk = Slurp(outDir / "atlas_obj.nk");
         CHECK(nk.find("atlas_textures") != std::string::npos);
         CHECK(nk.find("grid.atlas.png") != std::string::npos);
         CHECK(nk.find("atlas.obj") != std::string::npos);  // a single material: no parts folder
-        CHECK(!fs::exists(outDir / "atlas_parts"));
+        CHECK(!fs::exists(outDir / "atlas_obj_parts"));
         CHECK(Reported(rep, "1 with a texture wired in"));
     }
 
@@ -118,7 +118,7 @@ int main() {
         const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/uvset_scene.usda", options);
         if (rep.ok) {
             CHECK(fs::file_size(outDir / "uvset.abc") > 0);
-            const std::string nk = Slurp(outDir / "uvset.nk");
+            const std::string nk = Slurp(outDir / "uvset_abc.nk");
             CHECK(nk.find("uvset.abc") != std::string::npos);
             CHECK(nk.find("scene_view {{0} imported: 0 1 selected: 0 1 items: /root/Root_Mover/Root_MoverShape "
                           "/root/Root_Still/Root_StillShape}") != std::string::npos);

@@ -1,3 +1,3 @@
 #pragma once
 
-#define USDPREP_VERSION_STRING "0.2.0"
+#define USDPREP_VERSION_STRING "0.9.0"

@@ -6,9 +6,9 @@
 // it cannot take from the file it gets from a script next to it:
 //
 //   car.abc            everything, the file that was asked for
-//   car_parts/*.abc    one file per material, when there are several -
+//   car_abc_parts/*    one file per material, when there are several -
 //                      a ReadGeo takes one texture for all it reads
-//   car.nk             ReadGeo nodes with their textures wired in and a
+//   car_abc.nk         ReadGeo nodes with their textures wired in and a
 //                      Scene joining them: File > Insert Comp Nodes
 //
 // The source is the finished .usdc the rest of the pipeline produced, so
@@ -295,9 +295,11 @@ bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& 
     for (const std::vector<size_t>& group : byLook) all.insert(all.end(), group.begin(), group.end());
     if (!writeFile(out, all)) return false;
 
+    // "car_abc.nk", "car_abc_parts": an .obj and an .abc of the same name do not take each other's
+    const std::string sidecar = out.stem().string() + "_" + extension.substr(1);
     std::vector<fs::path> partOf(looks.size(), out);
     if (looks.size() > 1) {
-        const fs::path parts = out.parent_path() / (out.stem().string() + "_parts");
+        const fs::path parts = out.parent_path() / (sidecar + "_parts");
         std::error_code ec;
         fs::create_directories(parts, ec);
         for (size_t slot = 0; slot < looks.size(); ++slot) {
@@ -307,7 +309,7 @@ bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& 
     }
 
     // the script that puts it together in Nuke
-    const fs::path script = out.parent_path() / (out.stem().string() + ".nk");
+    const fs::path script = out.parent_path() / (sidecar + ".nk");
     std::ofstream nk(script, std::ios::binary);
     size_t textured = 0;
     for (size_t slot = 0; slot < looks.size(); ++slot) {
@@ -351,7 +353,7 @@ bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& 
     rep.Info(tag, script.filename().string() + ": " + std::to_string(looks.size()) + " ReadGeo node(s), " +
                       std::to_string(textured) + " with a texture wired in - Nuke reads no materials from an " +
                       extension + ". File > Insert Comp Nodes; the paths inside are absolute" +
-                      (looks.size() > 1 ? ", the per-material files are in " + out.stem().string() + "_parts" : ""));
+                      (looks.size() > 1 ? ", the per-material files are in " + sidecar + "_parts" : ""));
     return true;
 }
 

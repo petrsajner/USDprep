@@ -7,6 +7,29 @@
 
 ---
 
+## Where the plan ended up (2026-09-20, v0.9.0)
+
+The study below is kept as it was written. What was built follows it in
+structure (core library, `usdcut`, a panel inside usdtweak, milestones
+M0–M4) and departs from it wherever Nuke was measured to behave
+differently from what the study assumed. The measurements are in
+`NUKE_COMPAT.md`; the logs are `M0_LOG.md` … `M4_LOG.md`.
+
+| The study said | What happened, and why |
+|---|---|
+| Working name *USD Prep*, final name TBD | **USDprep** — program, installer, window title. Licence Apache-2.0, as usdtweak. |
+| Target profile: packaged as `.usdz` | **`.usdc` + a textures folder.** Nuke 16.1 and 17.0 load the geometry of a `.usdz` and none of the textures inside it. The tool offers only what Nuke reads; `.usdz` is refused. |
+| UsdPreviewSurface *or MaterialX* materials | UsdPreviewSurface only. A MaterialX output next to a standard surface renders **black** in Nuke; it is removed. |
+| Textures: convert / cap / relink | Cap and relink, plus what the measurements added: **UDIM sets stitched into an atlas** (Nuke does not expand `<UDIM>`), the UV set the material really reads. `.tx` needs no conversion — Nuke reads it. |
+| Instancing: keep it where possible | **De-instance by default**: Nuke runs out of open files on a heavily instanced scene (1431 instances: fails; 78: fine). The `.usdc` does not grow — identical data is stored once. |
+| Lights and cameras travel with the asset | Cameras do. **Lights are off by default** — any light in the file switches Nuke's unlit default off; switched on, the types Nuke cannot use become axes of the same name. |
+| Level 3: export `.abc` / `.fbx` / `.obj` | `.abc` (animated) and `.obj` (still) for Nuke's **classic 3D** — the only 3D an older Nuke has — each with a generated `.nk` that wires the textures in. `.fbx` left out: proprietary SDK, nothing gained over the other two. |
+| Source build of USD with OpenImageIO + Alembic for the release | Not needed. The release bundles the conda-forge USD the tests ran against; Alembic is a small static build of its own; OpenImageIO is not required to get textures into Nuke. |
+| — | Added by measurement, not in the study: skinning baked to point caches, Z-up scenes stood up, per-face materials split into meshes, implicit shapes meshed, guide/proxy geometry hidden when kept. One rule behind all of it: what causes trouble in Nuke is off by default; switched on, it is converted or replaced, and the report says so by name. |
+| M4: Linux build + AppImage, Nuke 16.0, GPU-driver table | Open. Windows is done: self-contained bundle, per-user installer, user manual. |
+
+---
+
 ## 0. TL;DR / Recommendation
 
 1. **Base the tool on [usdtweak](https://github.com/cpichard/usdtweak)** — contrary to its stale `master` README, the project is **actively maintained** (commits Aug 2026, monthly installers incl. `win64.exe`), Apache-2.0, C++/ImGui, builds against OpenUSD 25.x, and — crucially — has an official **addons mechanism** designed exactly for "build dedicated tools on top of the main application".

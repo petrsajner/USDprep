@@ -87,8 +87,8 @@ which does not read USD the way 14+ does. `-o car.abc` and `-o car.obj`
 write what it does read: meshes in world space with the UVs the material
 uses - an `.abc` with the animation (the trimmed range, or one frame with
 `--frame`), an `.obj` as a still. Next to the file: the textures folder,
-one file per material in `car_parts/` when there are several (a ReadGeo
-takes one texture for all it reads), and `car.nk` - File > Insert Comp
+one file per material in `car_abc_parts/` when there are several (a ReadGeo
+takes one texture for all it reads), and `car_abc.nk` - File > Insert Comp
 Nodes brings ReadGeo nodes with their textures wired in and a Scene
 joining them, because Nuke reads no materials from either format. Set the
 Nuke project to the scene's frame rate for an `.abc`. Everything the USD

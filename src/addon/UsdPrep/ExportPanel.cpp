@@ -427,9 +427,9 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
         ImGui::TextWrapped("A .usdc file with a \"%s_textures\" folder next to it - keep the two together.",
                            OutputNameOf(_outputPath).c_str());
     } else {
-        ImGui::TextWrapped("The file, its textures folder and \"%s.nk\": in Nuke, File > Insert Comp Nodes "
+        ImGui::TextWrapped("The file, its textures folder and \"%s_%s.nk\": in Nuke, File > Insert Comp Nodes "
                            "brings the geometry with its textures wired in. %s",
-                           OutputNameOf(_outputPath).c_str(),
+                           OutputNameOf(_outputPath).c_str(), _format == 1 ? "abc" : "obj",
                            _format == 1 ? "Animation is inside; set the Nuke project to the scene's frame rate."
                                         : "No animation in an .obj - it is a still of one frame.");
     }
