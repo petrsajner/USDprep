@@ -34,24 +34,20 @@ std::vector<SdfPath> RemoveNestedPaths(std::vector<SdfPath> paths) {
     return result;
 }
 
-}  // namespace
-
-Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
-    Report rep;
+void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& options) {
     rep.inputPath = inputPath;
     rep.outputPath = options.outputPath;
-    DiagnosticsToReport diagnostics(rep);
 
     const bool keepMode = !options.keepPaths.empty();
     const bool dropMode = !options.dropPaths.empty() || !options.dropTypes.empty() ||
                           !options.dropPurposes.empty();
     if (keepMode == dropMode) {  // both or neither
         rep.Fail("specify exactly one of --except (keep) or --drop");
-        return rep;
+        return;
     }
     if (options.outputPath.empty()) {
         rep.Fail("no output path given");
-        return rep;
+        return;
     }
 
     if (keepMode) {
@@ -73,7 +69,8 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
                 break;
             }
         }
-        return r;
+        rep = r;
+        return;
     }
 
     // Drop mode: flatten the whole stage first, then delete the selected
@@ -81,7 +78,7 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
     UsdStageRefPtr stage = UsdStage::Open(inputPath, UsdStage::LoadAll);
     if (!stage) {
         rep.Fail("cannot open stage: " + inputPath);
-        return rep;
+        return;
     }
     rep.before = InspectStage(inputPath).counts;
     const std::string inputDefaultPrim =
@@ -89,7 +86,7 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
 
     const std::vector<SdfPath> roots =
         RemoveNestedPaths(ValidatePrimPaths(stage, options.dropPaths, rep));
-    if (!rep.error.empty()) return rep;
+    if (!rep.error.empty()) return;
 
     if (options.deinstance) {
         const size_t n = DeinstanceStage(stage);
@@ -108,7 +105,7 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
     const std::string tmpPath = TempPathFor(options.outputPath);
     if (!stage->Export(tmpPath, /*addSourceFileComment=*/false)) {
         rep.Fail("failed to export flattened layer to " + tmpPath);
-        return rep;
+        return;
     }
     rep.Info("flatten", "composition flattened to a single layer");
 
@@ -118,7 +115,7 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
     UsdStageRefPtr flat = UsdStage::Open(tmpPath);
     if (!flat) {
         rep.Fail("cannot reopen flattened layer: " + tmpPath);
-        return rep;
+        return;
     }
     for (const SdfPath& p : roots) {
         const UsdPrim prim = flat->GetPrimAtPath(p);
@@ -126,11 +123,11 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
             rep.Fail("cannot delete " + p.GetAsString() +
                      ": it lives inside instanced content shared by several "
                      "instances — re-run with de-instancing enabled");
-            return rep;
+            return;
         }
         if (!flat->RemovePrim(p)) {
             rep.Fail("failed to delete prim " + p.GetAsString());
-            return rep;
+            return;
         }
     }
     if (!roots.empty()) {
@@ -167,6 +164,21 @@ Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
     flat->Save();
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures);
+}
+
+}  // namespace
+
+Report PruneStage(const std::string& inputPath, const PruneOptions& options) {
+    Report rep;
+    if (!options.keepPaths.empty()) {
+        // keep mode runs through ExtractPrims, which harvests USD's
+        // diagnostics itself; a second delegate here would double them
+        DoPrune(rep, inputPath, options);
+    } else {
+        // scoped: the harvest has to land in `rep` before it is returned
+        detail::DiagnosticsToReport diagnostics(rep);
+        DoPrune(rep, inputPath, options);
+    }
     return rep;
 }
 

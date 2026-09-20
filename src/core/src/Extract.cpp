@@ -11,39 +11,39 @@
 
 namespace usdprep {
 
-Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options) {
+namespace {
+
+void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& options) {
     using namespace detail;
 
-    Report rep;
     rep.inputPath = inputPath;
     rep.outputPath = options.outputPath;
-    DiagnosticsToReport diagnostics(rep);
 
     if (options.primPaths.empty()) {
         rep.Fail("no prim paths given");
-        return rep;
+        return;
     }
     if (options.outputPath.empty()) {
         rep.Fail("no output path given");
-        return rep;
+        return;
     }
 
     // Full open for the before-numbers and path validation.
     UsdStageRefPtr full = UsdStage::Open(inputPath, UsdStage::LoadAll);
     if (!full) {
         rep.Fail("cannot open stage: " + inputPath);
-        return rep;
+        return;
     }
     rep.before = InspectStage(inputPath).counts;
     const std::vector<SdfPath> roots = ValidatePrimPaths(full, options.primPaths, rep);
-    if (!rep.error.empty()) return rep;
+    if (!rep.error.empty()) return;
 
     // Masked open: population limited to the requested subtrees.
     UsdStageRefPtr stage = UsdStage::OpenMasked(
         inputPath, UsdStagePopulationMask(roots), UsdStage::LoadAll);
     if (!stage) {
         rep.Fail("cannot open masked stage: " + inputPath);
-        return rep;
+        return;
     }
     rep.Info("extract",
              std::to_string(roots.size()) + " subtree(s) selected; composition flattened");
@@ -65,7 +65,7 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
     const std::string tmpPath = TempPathFor(options.outputPath);
     if (!stage->Export(tmpPath, /*addSourceFileComment=*/false)) {
         rep.Fail("failed to export flattened layer to " + tmpPath);
-        return rep;
+        return;
     }
 
     // Post-pass on the flattened output: drop the categories the recipe
@@ -75,7 +75,7 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
         const UsdStageRefPtr flat = UsdStage::Open(tmpPath);
         if (!flat) {
             rep.Fail("cannot reopen the flattened layer: " + tmpPath);
-            return rep;
+            return;
         }
         DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
         if (options.setDefaultPrim && AuthorDefaultPrim(flat, roots.front())) {
@@ -86,6 +86,19 @@ Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options)
     }
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures);
+}
+
+}  // namespace
+
+Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options) {
+    Report rep;
+    {
+        // Scoped: the harvest has to land in `rep` before it is returned.
+        // A delegate living in the function that returns `rep` harvests
+        // after the move and into a report nobody reads.
+        detail::DiagnosticsToReport diagnostics(rep);
+        DoExtract(rep, inputPath, options);
+    }
     return rep;
 }
 
