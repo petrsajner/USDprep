@@ -68,9 +68,11 @@ int ObjectCount(const UsdStageRefPtr& stage) {
     return count;
 }
 
-// Simple mode, applied once per installation: the panels an artist does
-// not need go away (the Windows menu brings any of them back), and this
-// panel takes the right side. From then on the layout is the user's.
+// Simple mode, applied at every start: a compositor opens the program to
+// the 3D view and this panel, nothing else. Whatever else they need they
+// open from the Windows / Tools menus, for this session - better than
+// starting in a crowded editor they cannot find their way around. Our own
+// panel is opened, too, should it have been closed.
 void ApplySimpleLayoutOnce() {
     static int frame = 0;
     static bool focused = false;
@@ -84,38 +86,49 @@ void ApplySimpleLayoutOnce() {
         ImGui::SetWindowFocus(kPanelTitle);
         focused = true;
     }
-    if (frame == 2) {
-        // The program is USDprep; usdtweak, which it is built on, keeps its
-        // credit in the About box.
-        if (GLFWwindow* window = glfwGetCurrentContext()) {
-            glfwSetWindowTitle(window, "USDprep " USDPREP_VERSION_STRING);
-        }
-        // second frame: our window exists, docking can be applied to it.
-        // The version lets a later release re-apply a changed simple mode
-        // once, without touching a layout the user has since arranged.
-        constexpr const char* kLayoutVersion = "2";
-        if (usdtweak::GetAddonString(kAddonId, "layoutVersion", "0") == kLayoutVersion) return;
-        if (Editor* editor = usdtweak::GetEditor()) {
-            EditorSettings& settings = editor->GetSettingsForAddons();
-            settings._showOutliner = false;
-            settings._showPropertyEditor = false;
-            settings._showTimeline = false;
-            settings._showContentBrowser = false;
-            settings._showSdfAttributeEditor = false;
-            settings._showLayerHierarchyEditor = false;
-            settings._showLayerStackEditor = false;
-            settings._showPrimSpecEditor = false;
-            settings._textEditor = false;
-            settings._showUsdConnectionEditor = false;
-            settings._showDebugWindow = false;
-            settings._showSearch = false;
-        }
+    if (frame != 2) return;
+
+    // The program is USDprep; usdtweak, which it is built on, keeps its
+    // credit in the About box.
+    if (GLFWwindow* window = glfwGetCurrentContext()) {
+        glfwSetWindowTitle(window, "USDprep " USDPREP_VERSION_STRING);
+    }
+    if (Editor* editor = usdtweak::GetEditor()) {
+        EditorSettings& settings = editor->GetSettingsForAddons();
+        settings._showOutliner = false;
+        settings._showPropertyEditor = false;
+        settings._showTimeline = false;
+        settings._showContentBrowser = false;
+        settings._showSdfAttributeEditor = false;
+        settings._showLayerHierarchyEditor = false;
+        settings._showLayerStackEditor = false;
+        settings._showPrimSpecEditor = false;
+        settings._textEditor = false;
+        settings._showUsdConnectionEditor = false;
+        settings._showDebugWindow = false;
+        settings._showSearch = false;
+        settings._showValidator = false;
+        settings._showHydraBrowser = false;
+        settings._showHydraNoticeLogger = false;
+        settings._showViewport1 = true;
+        settings._showViewport2 = false;
+        settings._showViewport3 = false;
+        settings._showViewport4 = false;
+    }
+    // the windows of other addons (shader registry inspector and the like) as well
+    for (const auto& addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
+        if (addon.kind != UsdTweakAddon::Kind::Window) continue;
+        usdtweak::SetAddonBool(addon.id, "open", addon.id == kAddonId);
+    }
+    // docked where the outliner lives, the first time round
+    constexpr const char* kLayoutVersion = "2";
+    if (usdtweak::GetAddonString(kAddonId, "layoutVersion", "0") != kLayoutVersion) {
         if (ImGuiWindowSettings* outliner = ImGui::FindWindowSettingsByID(ImHashStr("Stage outliner"))) {
             if (outliner->DockId != 0) ImGui::DockBuilderDockWindow(kPanelTitle, outliner->DockId);
         }
         usdtweak::SetAddonString(kAddonId, "layoutVersion", kLayoutVersion);
-        usdtweak::PersistSettings();
     }
+    usdtweak::PersistSettings();
 }
 
 // usdtweak switches the content browser on every time a stage is opened.

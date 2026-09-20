@@ -149,6 +149,12 @@ Help > About and on every page of the manual. The manual has a section
 "USDprep and usdtweak": built on it, most of the editor starts hidden,
 nothing was removed - Windows menu for its panels, Tools menu for ours.
 
+**Simple mode at every start** (Petr: "I would rather have the user open a
+panel when they need it than open into a crowded UI they cannot read").
+It used to be applied once per installation; now every start closes
+usdtweak's panels and the windows of other addons, keeps Viewport1 and
+opens our panel. What the user opens stays for the session.
+
 ## Slice 5: v0.9.0 - manual, plan, and a third round of measurements
 
 - Version 0.9.0. `STUDY_AND_PLAN.md` opens with a table of where the plan

@@ -165,7 +165,8 @@ story += [p("That is the whole workflow. The rest of this manual explains the ch
             "you see the 3D view and the <i>Prep for Nuke</i> panel, and nothing else. Nothing was removed, "
             "though. Every usdtweak function is still there and works - the scene outliner, the property and "
             "layer editors, the timeline, the text editor, saving and editing USD layers. Open any of them from "
-            "the <b>Windows</b> menu, and close them again the same way; USDprep remembers your layout. "
+            "the <b>Windows</b> menu when you need them. They stay open for the session; the next time USDprep "
+            "starts it is tidy again - the 3D view and the panel, so nobody opens into a crowded editor. "
             "If you closed the <i>Prep for Nuke</i> panel itself, the <b>Tools</b> menu brings it back."),
           p("The version you are running is shown in the window title, at the right end of the panel's second "
             "row, and in <b>Help &gt; About</b>.", SMALL),
