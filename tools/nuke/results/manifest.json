@@ -1,0 +1,611 @@
+{
+ "fmt_usda": {
+  "file": "fmt_usda.usda",
+  "question": "textured quad as .usda",
+  "expect": "blue",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "fmt_usdc": {
+  "file": "fmt_usdc.usdc",
+  "question": "textured quad as .usdc",
+  "expect": "blue",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "fmt_usdz": {
+  "file": "fmt_usdz.usdz",
+  "question": "textured quad as .usdz",
+  "expect": "blue",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_jpg": {
+  "file": "tex_jpg.usda",
+  "question": "jpg texture",
+  "expect": "blue",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_exr": {
+  "file": "tex_exr.usda",
+  "question": "exr texture",
+  "expect": "blue",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_tif": {
+  "file": "tex_tif.usda",
+  "question": "tif texture",
+  "expect": "blue",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_udim_multi": {
+  "file": "tex_udim_multi.usda",
+  "question": "<UDIM> template, two tiles",
+  "expect": "blue if read",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_udim_single": {
+  "file": "tex_udim_single.usda",
+  "question": "<UDIM> template, one tile",
+  "expect": "blue if read",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_transform2d": {
+  "file": "tex_transform2d.usda",
+  "question": "UsdTransform2d (what the UDIM atlas relies on)",
+  "expect": "left red, right green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "tex_abs_missing": {
+  "file": "tex_abs_missing.usda",
+  "question": "missing texture",
+  "expect": "anything but a crash",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_constant": {
+  "file": "mat_constant.usda",
+  "question": "UsdPreviewSurface, constant colour",
+  "expect": "red",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_displaycolor": {
+  "file": "mat_displaycolor.usda",
+  "question": "no material, displayColor",
+  "expect": "green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_emissive": {
+  "file": "mat_emissive.usda",
+  "question": "emissiveColor",
+  "expect": "blue",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "mat_opacity": {
+  "file": "mat_opacity.usda",
+  "question": "opacity 0.3",
+  "expect": "alpha around 0.3",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_opacity_tex": {
+  "file": "mat_opacity_tex.usda",
+  "question": "opacity from a texture",
+  "expect": "left half transparent",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_inherited": {
+  "file": "mat_inherited.usda",
+  "question": "binding inherited from the parent",
+  "expect": "red",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_both_purposes": {
+  "file": "mat_both_purposes.usda",
+  "question": "full (red) and preview (green) bindings - which one does Nuke show",
+  "expect": "red or green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_only_full": {
+  "file": "mat_only_full.usda",
+  "question": "only a material:binding:full",
+  "expect": "red if honoured",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_only_preview": {
+  "file": "mat_only_preview.usda",
+  "question": "only a material:binding:preview",
+  "expect": "red if honoured",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_subsets": {
+  "file": "mat_subsets.usda",
+  "question": "per-face materials through GeomSubsets",
+  "expect": "left red, right green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_mtlx_only": {
+  "file": "mat_mtlx_only.usda",
+  "question": "MaterialX standard_surface only (green)",
+  "expect": "green if read",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_mtlx_and_preview": {
+  "file": "mat_mtlx_and_preview.usda",
+  "question": "UsdPreviewSurface (red) next to MaterialX (green)",
+  "expect": "red or green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_arnold_only": {
+  "file": "mat_arnold_only.usda",
+  "question": "renderer-only material (arnold)",
+  "expect": "not green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_tris": {
+  "file": "geo_tris.usda",
+  "question": "triangles",
+  "expect": "red, same coverage as a quad",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_ngon": {
+  "file": "geo_ngon.usda",
+  "question": "a six-sided face",
+  "expect": "red hexagon",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_subdiv_none": {
+  "file": "geo_subdiv_none.usda",
+  "question": "cube, no subdivision",
+  "expect": "red square",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_subdiv_cc": {
+  "file": "geo_subdiv_cc.usda",
+  "question": "cube, catmullClark",
+  "expect": "smaller than geo_subdiv_none if subdivided",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_lefthanded": {
+  "file": "geo_lefthanded.usda",
+  "question": "leftHanded orientation",
+  "expect": "red or culled",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_backface": {
+  "file": "geo_backface.usda",
+  "question": "single-sided quad facing away",
+  "expect": "culled or red",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_backface_ds": {
+  "file": "geo_backface_ds.usda",
+  "question": "doubleSided quad facing away",
+  "expect": "red",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_sphere": {
+  "file": "geo_sphere.usda",
+  "question": "implicit Sphere",
+  "expect": "red shape",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_cube": {
+  "file": "geo_cube.usda",
+  "question": "implicit Cube",
+  "expect": "red shape",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_cylinder": {
+  "file": "geo_cylinder.usda",
+  "question": "implicit Cylinder",
+  "expect": "red shape",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_cone": {
+  "file": "geo_cone.usda",
+  "question": "implicit Cone",
+  "expect": "red shape",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_capsule": {
+  "file": "geo_capsule.usda",
+  "question": "implicit Capsule",
+  "expect": "red shape",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_curves": {
+  "file": "geo_curves.usda",
+  "question": "BasisCurves",
+  "expect": "green cross if drawn",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_points": {
+  "file": "geo_points.usda",
+  "question": "Points",
+  "expect": "green dots if drawn",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_invisible": {
+  "file": "geo_invisible.usda",
+  "question": "visibility = invisible",
+  "expect": "nothing",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_purpose_render": {
+  "file": "geo_purpose_render.usda",
+  "question": "purpose = render",
+  "expect": "drawn or not",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_purpose_proxy": {
+  "file": "geo_purpose_proxy.usda",
+  "question": "purpose = proxy",
+  "expect": "drawn or not",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_purpose_guide": {
+  "file": "geo_purpose_guide.usda",
+  "question": "purpose = guide",
+  "expect": "drawn or not",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "geo_inactive": {
+  "file": "geo_inactive.usda",
+  "question": "active = false",
+  "expect": "nothing",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "inst_native": {
+  "file": "inst_native.usda",
+  "question": "native instancing (instanceable references)",
+  "expect": "two red squares",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "inst_point": {
+  "file": "inst_point.usda",
+  "question": "PointInstancer",
+  "expect": "three red squares",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "comp_reference": {
+  "file": "comp_reference.usda",
+  "question": "an unflattened reference to another file",
+  "expect": "red",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "comp_variant": {
+  "file": "comp_variant.usda",
+  "question": "variant selection (green selected)",
+  "expect": "green",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "anim_xform": {
+  "file": "anim_xform.usda",
+  "question": "animated transform",
+  "expect": "left at frame 1, right at frame 10",
+  "light": true,
+  "frames": [
+   1,
+   10
+  ]
+ },
+ "anim_points": {
+  "file": "anim_points.usda",
+  "question": "animated points (a point cache)",
+  "expect": "left at frame 1, right at frame 10",
+  "light": true,
+  "frames": [
+   1,
+   10
+  ]
+ },
+ "anim_visibility": {
+  "file": "anim_visibility.usda",
+  "question": "animated visibility",
+  "expect": "there at 1, gone at 10",
+  "light": true,
+  "frames": [
+   1,
+   10
+  ]
+ },
+ "anim_fps_offset": {
+  "file": "anim_fps_offset.usda",
+  "question": "animation at production frame numbers",
+  "expect": "left at 1001, right at 1010",
+  "light": true,
+  "frames": [
+   1001,
+   1010
+  ]
+ },
+ "meta_upz": {
+  "file": "meta_upz.usda",
+  "question": "upAxis = Z: a box that is tall along Z",
+  "expect": "tall if Nuke converts the axis, small square if not",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "meta_mpu1": {
+  "file": "meta_mpu1.usda",
+  "question": "metersPerUnit = 1, quad of 1 unit",
+  "expect": "same size as meta_mpu001 unless Nuke scales by units",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "meta_mpu001": {
+  "file": "meta_mpu001.usda",
+  "question": "metersPerUnit = 0.01, same quad",
+  "expect": "reference",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "light_none": {
+  "file": "light_none.usda",
+  "question": "no light anywhere",
+  "expect": "black or headlight - the baseline",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_usd_distant": {
+  "file": "light_usd_distant.usda",
+  "question": "a UsdLux DistantLight (red) in the file",
+  "expect": "red if the file's lights are used",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_usd_sphere": {
+  "file": "light_usd_sphere.usda",
+  "question": "a UsdLux SphereLight (green) in the file",
+  "expect": "green if the file's lights are used",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "cam_usd": {
+  "file": "cam_usd.usda",
+  "question": "a Camera in the file, one unit to the right",
+  "expect": "quad left of centre when rendered through it",
+  "light": true,
+  "frames": [
+   1
+  ],
+  "camera": "/Root/Cam"
+ },
+ "mat_arnold_and_preview": {
+  "file": "mat_arnold_and_preview.usda",
+  "question": "UsdPreviewSurface (red) next to an arnold output",
+  "expect": "red",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_no_outputs": {
+  "file": "mat_no_outputs.usda",
+  "question": "bound to a material with no outputs at all",
+  "expect": "grey, or the mesh vanishes",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "mat_unbound": {
+  "file": "mat_unbound.usda",
+  "question": "no material, no displayColor",
+  "expect": "default grey",
+  "light": true,
+  "frames": [
+   1
+  ]
+ },
+ "light_distantlight": {
+  "file": "light_distantlight.usda",
+  "question": "DistantLight (green) in the file",
+  "expect": "green if this light type works; black if it only switches the default lighting off",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_spherelight": {
+  "file": "light_spherelight.usda",
+  "question": "SphereLight (green) in the file",
+  "expect": "green if this light type works; black if it only switches the default lighting off",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_rectlight": {
+  "file": "light_rectlight.usda",
+  "question": "RectLight (green) in the file",
+  "expect": "green if this light type works; black if it only switches the default lighting off",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_disklight": {
+  "file": "light_disklight.usda",
+  "question": "DiskLight (green) in the file",
+  "expect": "green if this light type works; black if it only switches the default lighting off",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_cylinderlight": {
+  "file": "light_cylinderlight.usda",
+  "question": "CylinderLight (green) in the file",
+  "expect": "green if this light type works; black if it only switches the default lighting off",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "light_domelight": {
+  "file": "light_domelight.usda",
+  "question": "DomeLight (green) in the file",
+  "expect": "green if this light type works; black if it only switches the default lighting off",
+  "light": false,
+  "frames": [
+   1
+  ]
+ },
+ "skel_anim": {
+  "file": "skel_anim.usda",
+  "question": "UsdSkel skinning (a joint carries the quad)",
+  "expect": "left at 1, right at 10 if skinning is evaluated; centre if not",
+  "light": true,
+  "frames": [
+   1,
+   10
+  ]
+ }
+}
