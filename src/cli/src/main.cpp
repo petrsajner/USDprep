@@ -1,6 +1,6 @@
 // usdcut — CLI face of usdprep-core.
 //
-//   usdcut extract <scene.usd(a|c|z)> <prim-path>... -o out.usdc|usda
+//   usdcut extract <scene.usd(a|c|z)|model.obj> <prim-path>... -o out.usdc|usda
 //   usdcut prune   <scene> --except /A,/B -o out.usdc   (keep only)
 //   usdcut prune   <scene> --drop /A,/B -o out.usdc     (delete selection)
 //   usdcut prune   <scene> --drop-type light -o out.usdc
@@ -9,9 +9,11 @@
 //   usdcut presets [<name>]
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -21,6 +23,7 @@
 #include <pxr/pxr.h>
 
 #include <usdprep/Extract.h>
+#include <usdprep/Import.h>
 #include <usdprep/Prune.h>
 #include <usdprep/Recipe.h>
 #include <usdprep/Select.h>
@@ -46,6 +49,8 @@ void PrintUsage() {
         << "by Petr Sajner, Apache License 2.0\n\n"
         << "usage:\n"
         << "  usdcut extract <scene> <prim-path>... -o <out.usdc|usda|obj|abc> [options]\n"
+        << "                         <scene> is a USD file, or an .obj (converted to a\n"
+        << "                         temporary USD first; see 'usdcut inspect' for its paths)\n"
         << "  usdcut prune   <scene> (--except <paths> | --drop <paths> |\n"
         << "                          --drop-type <types> | --drop-purpose <purposes>)\n"
         << "                         -o <out> [options]\n"
@@ -96,6 +101,47 @@ void PrintUsage() {
         << "  name pattern           plain text matches anywhere in the prim name;\n"
         << "                         * and ? turn it into a wildcard match\n";
 }
+
+// A scene USD cannot read (.obj) becomes a temporary USD file first: the
+// commands then work on it like on any scene. The temporary goes when the
+// command is done. Notes about the conversion go to stderr, so that the
+// paths 'select' prints stay alone on stdout.
+class SceneInput {
+  public:
+    explicit SceneInput(std::string path) : _path(std::move(path)) {}
+    ~SceneInput() {
+        std::error_code ec;
+        if (!_dir.empty()) std::filesystem::remove_all(_dir, ec);
+    }
+    SceneInput(const SceneInput&) = delete;
+    SceneInput& operator=(const SceneInput&) = delete;
+
+    // False when the file could not be converted (said on stderr).
+    bool Prepare() {
+        if (!usdprep::IsImportable(_path)) return true;
+        std::error_code ec;
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        _dir = std::filesystem::temp_directory_path(ec) / ("usdcut-import-" + std::to_string(stamp));
+        const std::string stem = std::filesystem::u8path(_path).stem().u8string();
+        const std::string usd = (_dir / std::filesystem::u8path(stem + ".usdc")).u8string();
+        const usdprep::Report rep = usdprep::ImportToUsd(_path, usd);
+        for (const usdprep::ReportEntry& e : rep.entries) {
+            std::cerr << (e.severity == usdprep::ReportEntry::Severity::Warning ? "  [warning] " : "  [info] ")
+                      << e.action << ": " << e.detail << "\n";
+        }
+        if (!rep.ok) {
+            std::cerr << "usdcut: cannot convert " << _path << ": " << rep.error << "\n";
+            return false;
+        }
+        _path = usd;
+        return true;
+    }
+    const std::string& Path() const { return _path; }
+
+  private:
+    std::string _path;
+    std::filesystem::path _dir;
+};
 
 std::vector<std::string> SplitCommaList(const std::string& s) {
     std::vector<std::string> out;
@@ -314,7 +360,9 @@ int RunExtract(const std::vector<std::string>& args) {
     usdprep::ExtractOptions options;
     ApplyCommon(common, recipe, &options);
     options.primPaths.assign(positionals.begin() + 1, positionals.end());
-    usdprep::Report rep = usdprep::ExtractPrims(positionals[0], options);
+    SceneInput scene(positionals[0]);
+    if (!scene.Prepare()) return 1;
+    usdprep::Report rep = usdprep::ExtractPrims(scene.Path(), options);
     EmitReport(rep, common.reportPath);
     return rep.ok ? 0 : 1;
 }
@@ -373,7 +421,9 @@ int RunPrune(const std::vector<std::string>& args) {
     if (!typedDropTypes.empty()) options.dropTypes = typedDropTypes;
     if (!typedDropPurposes.empty()) options.dropPurposes = typedDropPurposes;
 
-    usdprep::Report rep = usdprep::PruneStage(positionals[0], options);
+    SceneInput scene(positionals[0]);
+    if (!scene.Prepare()) return 1;
+    usdprep::Report rep = usdprep::PruneStage(scene.Path(), options);
     EmitReport(rep, common.reportPath);
     return rep.ok ? 0 : 1;
 }
@@ -423,7 +473,9 @@ int RunSelect(const std::vector<std::string>& args) {
         return 2;
     }
 
-    const usdprep::SelectResult result = usdprep::SelectPrims(scene, options);
+    SceneInput input(scene);
+    if (!input.Prepare()) return 1;
+    const usdprep::SelectResult result = usdprep::SelectPrims(input.Path(), options);
     if (!result.error.empty()) {
         std::cerr << "usdcut select: " << result.error << "\n";
         return 1;
@@ -472,8 +524,10 @@ int RunInspect(const std::vector<std::string>& args) {
         std::cerr << "usdcut inspect: " << (error.empty() ? "usage: usdcut inspect <scene>" : error) << "\n";
         return 2;
     }
+    SceneInput scene(positionals[0]);
+    if (!scene.Prepare()) return 1;
     std::string err;
-    usdprep::StageInfo info = usdprep::InspectStage(positionals[0], &err);
+    usdprep::StageInfo info = usdprep::InspectStage(scene.Path(), &err);
     if (!err.empty()) {
         std::cerr << "usdcut inspect: " << err << "\n";
         return 1;

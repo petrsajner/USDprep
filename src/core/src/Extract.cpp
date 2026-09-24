@@ -38,15 +38,24 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     const std::vector<SdfPath> roots = ValidatePrimPaths(full, options.primPaths, rep);
     if (!rep.error.empty()) return;
 
-    // Masked open: population limited to the requested subtrees.
-    UsdStageRefPtr stage = UsdStage::OpenMasked(
-        inputPath, UsdStagePopulationMask(roots), UsdStage::LoadAll);
+    // Masked open: population limited to the requested subtrees - and to the
+    // materials they use, wherever in the scene those live.
+    UsdStagePopulationMask mask(roots);
+    const std::vector<SdfPath> materials = MaterialsFromOutside(full, roots);
+    for (const SdfPath& material : materials) mask.Add(material);
+    UsdStageRefPtr stage = UsdStage::OpenMasked(inputPath, mask, UsdStage::LoadAll);
     if (!stage) {
         rep.Fail("cannot open masked stage: " + inputPath);
         return;
     }
     rep.Info("extract",
              std::to_string(roots.size()) + " subtree(s) selected; composition flattened");
+    if (!materials.empty()) {
+        rep.Info("materials", std::to_string(materials.size()) +
+                                  " material(s) or shader node(s) the selection uses came along from elsewhere "
+                                  "in the scene (" + materials.front().GetAsString() +
+                                  (materials.size() > 1 ? ", ...)" : ")"));
+    }
 
     if (options.deinstance) {
         const size_t n = DeinstanceStage(stage);
@@ -75,12 +84,13 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     const bool hasStrip = options.materialPurpose != "all" || options.stripRenderContexts ||
                           options.stripUnusedMaterials || options.stripDrawModeCards || options.udimAtlas || options.nukeCompat ||
                           options.animation != "all" || options.simplifyRatio > 0.0;
-    if (options.setDefaultPrim || hasFilters || hasStrip) {
+    if (options.setDefaultPrim || hasFilters || hasStrip || HasImportSource(full)) {
         const UsdStageRefPtr flat = UsdStage::Open(tmpPath);
         if (!flat) {
             rep.Fail("cannot reopen the flattened layer: " + tmpPath);
             return;
         }
+        ForgetImportSource(flat);
         ExposedPrototypes prototypes(flat);  // kept instancing: the passes below reach into it
         DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
         StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
@@ -102,8 +112,9 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
                      "set to top-level ancestor of " + roots.front().GetAsString());
         }
         prototypes.Restore();
-        flat->Save();
+        SaveCompact(flat, tmpPath);
     }
+    SwapInPacked(tmpPath);  // the stage is closed now
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
                    options.maxTextureSize,

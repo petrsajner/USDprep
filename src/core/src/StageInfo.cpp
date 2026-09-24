@@ -78,7 +78,9 @@ StageInfo InspectStage(const std::string& path, std::string* error) {
     if (error) error->clear();
 
     std::error_code ec;
-    if (std::filesystem::exists(path)) {
+    // error codes, not exceptions: a network share that answers with an
+    // error must not take the program down
+    if (std::filesystem::exists(path, ec)) {
         info.fileSizeBytes = std::filesystem::file_size(path, ec);
     } else if (error) {
         *error = "file does not exist: " + path;

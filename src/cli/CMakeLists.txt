@@ -1,4 +1,8 @@
 add_executable(usdcut src/main.cpp)
+if(WIN32)
+    # UTF-8 paths and long paths (see the manifest)
+    target_sources(usdcut PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../windows/usdprep.manifest)
+endif()
 target_link_libraries(usdcut PRIVATE usdprep::core)
 if(MSVC)
     target_compile_options(usdcut PRIVATE /wd4244 /wd4305 /wd4996)

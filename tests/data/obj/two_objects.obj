@@ -1,0 +1,29 @@
+# Two objects, three materials, UVs and normals - and the things an
+# OBJ importer has to leave out: a two-corner polygon and a line.
+mtllib two_objects.mtl
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 3 1 0
+v 2 1 0
+v 2.5 2 0
+vt 0 0
+vt 1 0
+vt 1 1
+vt 0 1
+vn 0 0 1
+o Crate
+usemtl Wood
+f 1/1/1 2/2/1 3/3/1 4/4/1
+o Sign Post
+usemtl Paint
+f -5/1/1 -4/2/1 -3/3/1
+usemtl Metal
+f 5/2/1 7/3/1 8/4/1
+usemtl Paint
+f 8/4/1 7/3/1 9/2/1
+f 1 2
+l 1 2 3

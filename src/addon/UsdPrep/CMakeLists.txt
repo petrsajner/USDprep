@@ -16,6 +16,8 @@ usdtweak_add_addon(UsdPrep
         UsdPrep.cpp
         SceneTree.cpp
         ExportPanel.cpp
+        NativeDialogs.cpp
+        SceneOpening.cpp
 )
 
 # NOTE: plain signature on purpose — the usdtweak target uses the plain
@@ -23,6 +25,9 @@ usdtweak_add_addon(UsdPrep
 # two signatures on one target is a CMake error.
 target_link_libraries(usdtweak usdprep::core)
 if(WIN32)
-    # IFileSaveDialog (native "Save as..." in the addon)
+    # IFileSaveDialog / IFileOpenDialog (native file dialogs in the addon)
     target_link_libraries(usdtweak ole32)
+    # UTF-8 paths and long paths for the whole program (see the manifest; tools/sync-addon.sh
+    # copies it here from src/windows - usdtweak wants every source inside its own tree)
+    target_sources(usdtweak PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/usdprep.manifest)
 endif()

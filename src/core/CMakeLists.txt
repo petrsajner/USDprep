@@ -16,6 +16,7 @@ add_library(usdprep-core
     src/MeshExport.cpp
     src/AbcWriter.cpp
     src/StageInfo.cpp
+    src/ObjImport.cpp
 )
 add_library(usdprep::core ALIAS usdprep-core)
 

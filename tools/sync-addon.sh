@@ -9,6 +9,8 @@ DST="$ROOT/third_party/usdtweak/src/addons/UsdPrep"
 mkdir -p "$DST"
 rm -f "$DST"/*.cpp "$DST"/*.h
 cp "$SRC"/*.cpp "$SRC"/*.h "$SRC/CMakeLists.txt" "$DST/"
+# the program's manifest (UTF-8 paths), shared with usdcut
+cp "$ROOT/src/windows/usdprep.manifest" "$DST/"
 echo "Synced UsdPrep addon -> $DST"
 
 # The few changes usdprep needs in usdtweak itself (tools/usdtweak-patches),

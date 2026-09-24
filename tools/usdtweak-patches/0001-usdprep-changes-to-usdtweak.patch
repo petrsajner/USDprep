@@ -1,5 +1,5 @@
 diff --git a/src/Editor.cpp b/src/Editor.cpp
-index f35443a..4c82f94 100644
+index f35443a..af016f2 100644
 --- a/src/Editor.cpp
 +++ b/src/Editor.cpp
 @@ -221,6 +221,14 @@ struct AboutModalDialog : public ModalDialog {
@@ -17,7 +17,56 @@ index f35443a..4c82f94 100644
          char buf[256];
          snprintf(buf, sizeof(buf), "usdtweak pre-alpha version %s", GetBuildDate());
          textShadowed(buf);
-@@ -1306,6 +1314,15 @@ void Editor::Draw() {
+@@ -515,6 +523,12 @@ void Editor::DropCallback(GLFWwindow *window, int count, const char **paths) {
+         // TODO: Create a task, add a callback
+         if (editor && count) {
+             for (int i = 0; i < count; ++i) {
++                // an addon may know better what to do with the file
++                bool handled = false;
++                for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
++                    if (!handled && addon.onDropFile) handled = addon.onDropFile(std::string(paths[i]));
++                }
++                if (handled) continue;
+                 // make a drop event ?
+                 if (ArchGetFileLength(paths[i]) == 0) {
+                     // if the file is empty, this is considered a new file
+@@ -652,7 +666,12 @@ void Editor::FindOrOpenLayer(const std::string &path) {
+ }
+ 
+ //
+-void Editor::OpenStage(const std::string &path, bool openLoaded, bool enableHydra) {
++void Editor::OpenStage(const std::string &requestedPath, bool openLoaded, bool enableHydra) {
++    // An addon may turn the file into one USD reads, or take it over entirely.
++    std::string path = requestedPath;
++    for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
++        if (addon.onOpenStage && !addon.onOpenStage(path)) return;
++    }
+     auto newStage = UsdStage::Open(path, openLoaded ? UsdStage::LoadAll : UsdStage::LoadNone); // TODO: as an option
+     if (newStage) {
+         Viewport::SetStageHydraEnabled(newStage, enableHydra);
+@@ -660,7 +679,7 @@ void Editor::OpenStage(const std::string &path, bool openLoaded, bool enableHydr
+         SetCurrentStage(newStage);
+         _settings._showContentBrowser = true;
+         _settings._showViewport1 = true;
+-        _settings.UpdateRecentFiles(path);
++        _settings.UpdateRecentFiles(requestedPath);
+         StringSearchIndex::GetInstance().IndexStage(newStage);
+     }
+ }
+@@ -912,7 +931,11 @@ void Editor::DrawMainMenuBar() {
+                 DrawModalDialog<CreateUsdFileModalDialog>(*this);
+             }
+             if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open")) {
+-                DrawModalDialog<OpenUsdFileModalDialog>(*this);
++                bool handled = false;
++                for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
++                    if (!handled && addon.onOpenDialog) handled = addon.onOpenDialog();
++                }
++                if (!handled) DrawModalDialog<OpenUsdFileModalDialog>(*this);
+             }
+             if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " Open Recent (as stage)")) {
+                 int recentId = 0;
+@@ -1306,6 +1329,18 @@ void Editor::Draw() {
      }
  
  
@@ -29,21 +78,52 @@ index f35443a..4c82f94 100644
 +            if (addon.onStartup) addon.onStartup();
 +        }
 +    }
++    for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
++        if (addon.onFrame) addon.onFrame();
++    }
 +
      // Draw every registered addon that is a window-kind addon and currently open.
      for (const auto &addon : UsdTweakAddonRegistry::GetInstance().GetAll()) {
          if (addon.kind != UsdTweakAddon::Kind::Window || !addon.draw) continue;
+diff --git a/src/Editor.h b/src/Editor.h
+index 6a3ecb9..fae641e 100644
+--- a/src/Editor.h
++++ b/src/Editor.h
+@@ -77,7 +77,7 @@ class Editor {
+     void CreateNewLayer(const std::string &path);
+     void FindOrOpenLayer(const std::string &path);
+     void CreateStage(const std::string &path);
+-    void OpenStage(const std::string &path, bool openLoaded = true, bool enableHydra = true);
++    void OpenStage(const std::string &requestedPath, bool openLoaded = true, bool enableHydra = true);
+     void SaveLayerAs(SdfLayerRefPtr layer, const std::string &path);
+ 
+     /// Render the hydra viewport
 diff --git a/src/addons/AddonRegistry.h b/src/addons/AddonRegistry.h
-index 9d91ce7..b2fd376 100644
+index 9d91ce7..f7e85fc 100644
 --- a/src/addons/AddonRegistry.h
 +++ b/src/addons/AddonRegistry.h
-@@ -31,6 +31,9 @@ struct UsdTweakAddon {
+@@ -31,6 +31,24 @@ struct UsdTweakAddon {
      std::function<void()> activate;       // Kind::Action: fired from the menu
  
      std::function<bool()> isAvailable;    // optional; if returns false the menu item is greyed
 +    std::function<void()> onStartup;      // optional; called once, on the first frame, whether the
 +                                          // addon's window is open or not (a product built on
 +                                          // usdtweak arranges the editor for its users here)
++    std::function<void()> onFrame;        // optional; called every frame, before the addon windows,
++                                          // whether the addon's window is open or not (work that
++                                          // runs in the background reports back here)
++
++    // Opening files. A product built on usdtweak can bring its own file dialog and read
++    // formats USD cannot, by turning them into USD first.
++    std::function<bool()> onOpenDialog;   // optional; File > Open. Returns true when the addon
++                                          // showed its own dialog: usdtweak's stays shut.
++    std::function<bool(std::string &path)> onOpenStage;  // optional; before a stage is opened
++                                          // from a file. May replace `path` with the file to open
++                                          // instead (the recent-files list keeps the original).
++                                          // Returns false to not open it now: the addon opens it
++                                          // itself later, or has said why it cannot.
++    std::function<bool(const std::string &path)> onDropFile;  // optional; a file dropped on the
++                                          // window. Returns true when the addon took care of it.
      bool defaultOpen = false;             // Kind::Window only
      ImGuiWindowFlags windowFlags = 0;     // Kind::Window only
  };
@@ -215,6 +295,396 @@ index afba7e4..3f93bd0 100644
      /// Returns the current camera updated to match the viewport ratio
      GfCamera GetViewportCamera(double width, double height) const;
  
+diff --git a/src/widgets/FileBrowser.cpp b/src/widgets/FileBrowser.cpp
+index 2dc755c..1c158dc 100644
+--- a/src/widgets/FileBrowser.cpp
++++ b/src/widgets/FileBrowser.cpp
+@@ -43,18 +43,23 @@ Windows specific implementation
+ #include <cstdlib> // wcstombs
+ 
+ std::string GetVolumeName(const std::wstring &currentDrive) {
++    // A network drive is not asked for its name: when the share is slow or gone, the
++    // question blocks - and this runs while the program starts.
++    if (GetDriveTypeW(currentDrive.c_str()) == DRIVE_REMOTE) {
++        return "Network drive";
++    }
+     constexpr size_t volumeNameMaxSize = 512;
+     WCHAR volumeName[volumeNameMaxSize];
+     volumeName[0] = L'\0';
+     GetVolumeInformationW(currentDrive.c_str(), volumeName, volumeNameMaxSize, nullptr, nullptr, nullptr, nullptr, 0);
+     if (volumeName[0] != 0) {
+-        char volumeNameMultiBytes[volumeNameMaxSize];
+-        volumeNameMultiBytes[0] = '\0';
+-        std::wcstombs(volumeNameMultiBytes, volumeName, volumeNameMaxSize);
+-        return volumeNameMultiBytes;
+-    } else {
+-        return "Local disk";
++        // UTF-8, like every other string on screen
++        char volumeNameMultiBytes[volumeNameMaxSize * 4];
++        const int written = WideCharToMultiByte(CP_UTF8, 0, volumeName, -1, volumeNameMultiBytes,
++                                                static_cast<int>(sizeof(volumeNameMultiBytes)), nullptr, nullptr);
++        if (written > 0) return volumeNameMultiBytes;
+     }
++    return "Local disk";
+ }
+ 
+ DrivesListT InitDrivesList() {
+@@ -104,8 +109,32 @@ static bool fileExists = false;
+ static std::vector<std::string> validExts;
+ static std::string lineEditBuffer;
+ static fs::path displayedDirectory = fs::current_path();
++// Why the displayed folder could not be listed (a network share that is gone, no access...).
++// Shown in place of the list: a folder that cannot be read must never take the program down.
++static std::string directoryError;
+ };
+ 
++// A path as text for the screen. A name that cannot be converted (the file system allows
++// names no code page can hold) shows as "?" instead of throwing.
++static std::string DisplayString(const fs::path &path) {
++    try {
++        return path.string();
++    } catch (const std::exception &) {
++        return "?";
++    }
++}
++
++// What people paste: Explorer's "Copy as path" puts quotes around it, and a stray
++// space or newline comes along from other places.
++static std::string CleanPastedPath(std::string text) {
++    const char *blank = " \t\r\n";
++    const size_t first = text.find_first_not_of(blank);
++    if (first == std::string::npos) return {};
++    text = text.substr(first, text.find_last_not_of(blank) - first + 1);
++    if (text.size() >= 2 && text.front() == '"' && text.back() == '"') text = text.substr(1, text.size() - 2);
++    return text;
++}
++
+ void SetValidExtensions(const std::vector<std::string> &extensions) { validExts = extensions; }
+ 
+ // Using a timer to avoid querying the filesytem at every frame
+@@ -140,7 +169,7 @@ static bool DrawNavigationBar(fs::path &displayedDirectory) {
+     // Split the path navigator ??
+     std::string lineEditBuffer;
+     ScopedStyleColor style(ImGuiCol_Button, ImVec4(ColorTransparent));
+-    const std::string &directoryPath = displayedDirectory.string();
++    const std::string directoryPath = DisplayString(displayedDirectory);
+     std::string::size_type pos = 0;
+     std::string::size_type len = 0;
+     len = directoryPath.find(preferred_separator_char, pos);
+@@ -197,39 +226,23 @@ static bool DrawRefreshButton() {
+ }
+ 
+ static inline bool FileNameStartsWithDot(const fs::path &path) {
+-    const std::string &filename = path.filename().string();
++    const auto filename = path.filename().native();  // wide on Windows: nothing to convert, nothing to throw
+     return filename.size() > 0 && filename[0] == '.';
+ }
+ 
+-static bool ShouldBeDisplayed(const fs::directory_entry &p) {
+-    const auto &filename = p.path().filename();
+-    const auto startsWithDot = FileNameStartsWithDot(p.path());
+-    bool endsWithValidExt = true;
+-    if (!validExts.empty()) {
+-        endsWithValidExt = false;
+-        for (auto ext : validExts) { // we could stop the loop when the extension is found
+-            endsWithValidExt |= filename.extension() == ext;
+-        }
+-    }
+-
+-    try {
+-        const bool isDirectory = fs::is_directory(p);
+-        return !startsWithDot && (isDirectory || endsWithValidExt) && !fs::is_symlink(p);
+-    } catch (fs::filesystem_error &) {
+-        return false;
+-    }
+-}
+-
+-// Compare function for sorting directories before files
+-static bool compareDirectoryThenFile(const fs::directory_entry &a, const fs::directory_entry &b) {
+-    if (fs::is_directory(a) == fs::is_directory(b)) {
+-        return a < b;
+-    } else {
+-        return fs::is_directory(a) > fs::is_directory(b);
+-    }
+-}
++// One row of the list. Everything about an entry is asked once, when the folder is
++// listed: on a network share (DFS links above all) each question is a round trip that
++// can be slow, fail, or answer differently the next time - asked per frame and while
++// sorting, the answers froze the program or broke the sort.
++struct ListedEntry {
++    fs::path path;
++    std::string name;
++    bool isDirectory = false;
++    std::string modified;  // empty = unknown
++    std::string size;      // files only; empty = unknown
++};
+ 
+-static void DrawFileSize(uintmax_t fileSize) {
++static std::string FileSizeText(uintmax_t fileSize) {
+     static const char *format[6] = {"%juB", "%juK", "%juM", "%juG", "%juT", "%juP"};
+     constexpr int nbFormat = sizeof(format) / sizeof(const char *);
+     int i = 0;
+@@ -237,37 +250,90 @@ static void DrawFileSize(uintmax_t fileSize) {
+         fileSize /= 1024;
+         i++;
+     }
+-    ImGui::Text(format[i], fileSize);
++    char text[32];
++    snprintf(text, sizeof(text), format[i], fileSize);
++    return text;
++}
++
++// Reads what the list shows about an entry, without throwing. False = not shown.
++static bool ListEntry(const fs::directory_entry &entry, ListedEntry *listed) {
++    try {
++        const fs::path &path = entry.path();
++        if (FileNameStartsWithDot(path)) return false;
++        std::error_code ec;
++        if (entry.is_symlink(ec)) return false;
++        listed->isDirectory = entry.is_directory(ec);
++        if (ec) {
++            // A link that cannot be followed from here (a DFS link whose target does not answer
++            // this question) is still the folder the listing says it is.
++            std::error_code linkError;
++            const fs::file_type type = entry.symlink_status(linkError).type();
++            listed->isDirectory = !linkError && type == fs::file_type::directory;
++        }
++        if (!listed->isDirectory && !validExts.empty()) {
++            bool endsWithValidExt = false;
++            for (const auto &ext : validExts) endsWithValidExt |= path.extension() == ext;
++            if (!endsWithValidExt) return false;
++        }
++        listed->path = path;
++        listed->name = DisplayString(path.filename());
++        const auto lastModified = entry.last_write_time(ec);
++        if (!ec) {
++            const time_t cftime = toTimet(lastModified);
++            struct tm lt; // Convert to local time
++            localtime_(&lt, &cftime);
++            char text[32];
++            snprintf(text, sizeof(text), "%04d/%02d/%02d %02d:%02d", 1900 + lt.tm_year, lt.tm_mon + 1, lt.tm_mday,
++                     lt.tm_hour, lt.tm_min);
++            listed->modified = text;
++        }
++        if (!listed->isDirectory) {
++            const uintmax_t size = entry.file_size(ec);
++            if (!ec) listed->size = FileSizeText(size);
++        }
++        return true;
++    } catch (const std::exception &) {
++        return false;
++    }
+ }
+ 
+ void DrawFileBrowser(int height) {
+ 
+     static fs::path displayedFileName;
+-    static std::vector<fs::directory_entry> directoryContent;
++    static std::vector<ListedEntry> directoryContent;
+     static fs::path directoryContentPath;
+     static bool mustUpdateDirectoryContent = true;
+     static bool mustUpdateChosenFileName = false;
+ 
+     // Parse the line buffer containing the user input and try to make sense of it
+     auto ParseLineBufferEdit = [&]() {
+-        auto path = fs::path(lineEditBuffer);
+-        if (path != path.root_name() && fs::is_directory(path)) {
++        // a pasted path may come in quotes or with blanks around it
++        const std::string cleaned = CleanPastedPath(lineEditBuffer);
++        if (cleaned != lineEditBuffer) lineEditBuffer = cleaned;
++        fs::path path;
++        try {
++            path = fs::path(cleaned);
++        } catch (const std::exception &) {
++            return;
++        }
++        std::error_code ec;
++        if (path != path.root_name() && fs::is_directory(path, ec)) {
+             displayedDirectory = path;
+             mustUpdateDirectoryContent = true;
+             lineEditBuffer = "";
+             displayedFileName = "";
+             mustUpdateChosenFileName = true;
+-        } else if (path.parent_path() != path.root_name() && fs::is_directory(path.parent_path())) {
++        } else if (path.parent_path() != path.root_name() && fs::is_directory(path.parent_path(), ec)) {
+             displayedDirectory = path.parent_path();
+             mustUpdateDirectoryContent = true;
+-            lineEditBuffer = path.filename().string();
++            lineEditBuffer = DisplayString(path.filename());
+             displayedFileName = path.filename();
+             mustUpdateChosenFileName = true;
+         } else {
+             if (path.filename() != path) {
+                 displayedFileName = path.filename();
+                 mustUpdateChosenFileName = true;
+-                lineEditBuffer = path.filename().string();
++                lineEditBuffer = DisplayString(path.filename());
+             } else {
+                 displayedFileName = path;
+                 mustUpdateChosenFileName = true;
+@@ -278,25 +344,31 @@ void DrawFileBrowser(int height) {
+     // Update the list of entries for the chosen directory
+     auto UpdateDirectoryContent = [&]() {
+         directoryContent.clear();
+-        for (auto &item : fs::directory_iterator(displayedDirectory, fs::directory_options::skip_permission_denied)) {
+-            if (ShouldBeDisplayed(item)) {
+-                directoryContent.push_back(item);
+-            };
++        directoryError.clear();
++        std::error_code ec;
++        fs::directory_iterator item(displayedDirectory, fs::directory_options::skip_permission_denied, ec);
++        for (; !ec && item != fs::directory_iterator(); item.increment(ec)) {
++            ListedEntry listed;
++            if (ListEntry(*item, &listed)) directoryContent.push_back(std::move(listed));
+         }
+-        std::sort(directoryContent.begin(), directoryContent.end(), compareDirectoryThenFile);
++        if (ec) directoryError = ec.message();
++        // folders first, then by name - on the answers already in hand
++        std::sort(directoryContent.begin(), directoryContent.end(), [](const ListedEntry &a, const ListedEntry &b) {
++            return a.isDirectory != b.isDirectory ? a.isDirectory : a.path < b.path;
++        });
+         mustUpdateDirectoryContent = false;
+         directoryContentPath = displayedDirectory;
+     };
+ 
+     if (mustUpdateChosenFileName) {
+-        if (!displayedDirectory.empty() && !displayedFileName.empty() && fs::exists(displayedDirectory) &&
+-            fs::is_directory(displayedDirectory)) {
++        std::error_code ec;
++        if (!displayedDirectory.empty() && !displayedFileName.empty() && fs::is_directory(displayedDirectory, ec)) {
+             const auto path_ = displayedDirectory / displayedFileName;
+-            filePath = path_.string();
++            filePath = DisplayString(path_);
+         } else {
+             filePath = "";
+         }
+-        fileExists = fs::exists(filePath);
++        fileExists = !filePath.empty() && fs::exists(filePath, ec);
+         mustUpdateChosenFileName = false;
+     }
+ 
+@@ -319,6 +391,10 @@ void DrawFileBrowser(int height) {
+     
+     ImVec2 sizeArg(-1, height);
+     ImGui::PushItemWidth(-1); // List takes the full width
++    if (!directoryError.empty()) {
++        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.4f, 1.0f), "Cannot read this folder: %s", directoryError.c_str());
++        sizeArg.y -= ImGui::GetTextLineHeightWithSpacing();
++    }
+     if (ImGui::BeginListBox("##FileList", sizeArg)) {
+         constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg
+             | ImGuiTableFlags_ScrollY
+@@ -332,8 +408,8 @@ void DrawFileBrowser(int height) {
+             ImGui::TableHeadersRow();
+             int i = 0;
+             ImGui::PushID("direntries");
+-            for (auto dirEntry : directoryContent) {
+-                const bool isDirectory = dirEntry.is_directory();
++            for (const ListedEntry &dirEntry : directoryContent) {
++                const bool isDirectory = dirEntry.isDirectory;
+                 ImGui::TableNextRow();
+                 ImGui::TableSetColumnIndex(0);
+                 ImGui::PushID(i++);
+@@ -341,11 +417,11 @@ void DrawFileBrowser(int height) {
+                 // to the line edit buffer
+                 if (ImGui::Selectable("", false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap)) {
+                     if (isDirectory) {
+-                        displayedDirectory = dirEntry.path();
++                        displayedDirectory = dirEntry.path;
+                         mustUpdateDirectoryContent = true;
+                     } else {
+-                        displayedFileName = dirEntry.path();
+-                        lineEditBuffer = dirEntry.path().string();
++                        displayedFileName = dirEntry.path;
++                        lineEditBuffer = DisplayString(dirEntry.path);
+                         mustUpdateChosenFileName = true;
+                     }
+                 }
+@@ -354,26 +430,16 @@ void DrawFileBrowser(int height) {
+                 if (isDirectory) {
+                     ImGui::TextColored(ImVec4(1.0, 1.0, 0.0, 1.0), "%s ", ICON_FA_FOLDER);
+                     ImGui::TableSetColumnIndex(1); // the following line is allocating string for each directory/files, this is BAD
+-                    ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, 1.0), "%s", dirEntry.path().filename().string().c_str());
++                    ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, 1.0), "%s", dirEntry.name.c_str());
+                 } else {
+                     ImGui::TextColored(ImVec4(0.9, 0.9, 0.9, 1.0), "%s ", ICON_FA_FILE);
+                     ImGui::TableSetColumnIndex(1);
+-                    ImGui::TextColored(ImVec4(0.5, 1.0, 0.5, 1.0), "%s", dirEntry.path().filename().string().c_str());
++                    ImGui::TextColored(ImVec4(0.5, 1.0, 0.5, 1.0), "%s", dirEntry.name.c_str());
+                 }
+                 ImGui::TableSetColumnIndex(2);
+-                try {
+-                    const auto lastModified = last_write_time(dirEntry.path());
+-                    const time_t cftime = toTimet(lastModified);
+-                    struct tm lt; // Convert to local time
+-                    localtime_(&lt, &cftime);
+-                    ImGui::Text("%04d/%02d/%02d %02d:%02d", 1900 + lt.tm_year, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min);
+-                } catch (const std::exception &) {
+-                    ImGui::Text("Error reading file");
+-                }
++                ImGui::TextUnformatted(dirEntry.modified.c_str());
+                 ImGui::TableSetColumnIndex(3);
+-                if (!isDirectory) {
+-                    DrawFileSize(dirEntry.file_size());
+-                }
++                ImGui::TextUnformatted(dirEntry.size.c_str());
+             }
+             ImGui::PopID(); // direntries
+             ImGui::EndTable();
+@@ -389,7 +455,7 @@ bool FilePathExists() { return fileExists; }
+ 
+ std::string GetFileBrowserFilePath() { return filePath; }
+ 
+-std::string GetFileBrowserDirectory() { return displayedDirectory.string(); }
++std::string GetFileBrowserDirectory() { return DisplayString(displayedDirectory); }
+ 
+ 
+ 
+@@ -398,8 +464,10 @@ std::string GetFileBrowserFilePathRelativeTo(const std::string &root, bool unixi
+     const fs::path originalPath(filePath);
+     if (rootPath.is_absolute() && originalPath.is_absolute()) {
+         rootPath.remove_filename();
+-        const fs::path relativePath = fs::relative(originalPath, rootPath);
+-        auto relativePathStr = relativePath.string();
++        std::error_code ec;
++        const fs::path relativePath = fs::relative(originalPath, rootPath, ec);
++        if (ec || relativePath.empty()) return filePath;
++        auto relativePathStr = DisplayString(relativePath);
+         if (unixify) {
+             std::replace(relativePathStr.begin(), relativePathStr.end(), preferred_separator_char_windows,
+                          preferred_separator_char_unix);
+@@ -414,7 +482,8 @@ void EnsureFileBrowserDefaultExtension(const std::string &ext) {
+     if (!path.empty() && !path.has_extension()) {
+         path.replace_extension(ext);
+         filePath = path.generic_string();
+-        fileExists = fs::exists(filePath);
++        std::error_code ec;
++        fileExists = fs::exists(filePath, ec);
+     }
+ }
+ 
+@@ -422,8 +491,10 @@ void EnsureFileBrowserExtension(const std::string &ext) {
+     fs::path path(filePath);
+     if (!path.empty()) {
+         path.replace_extension(ext);
++        if (path.generic_string() == filePath) return; // called every frame: ask the disk only on a change
+         filePath = path.generic_string();
+-        fileExists = fs::exists(filePath);
++        std::error_code ec;
++        fileExists = fs::exists(filePath, ec);
+     }
+ }
+ 
+@@ -434,7 +505,8 @@ void ResetFileBrowserFilePath() {
+ 
+ 
+ void SetFileBrowserDirectory(const std::string &directory) {
+-    if (fs::exists(directory) && fs::is_directory(directory)) {
++    std::error_code ec;
++    if (fs::is_directory(directory, ec)) {
+         displayedDirectory = directory;
+     }
+ }
 diff --git a/src/widgets/ModalDialogs.cpp b/src/widgets/ModalDialogs.cpp
 index c866725..b9ee861 100644
 --- a/src/widgets/ModalDialogs.cpp

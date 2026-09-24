@@ -14,12 +14,9 @@
 
 #include <usdprep/Extract.h>
 
+#include "NativeDialogs.h"
 #include "OutputPath.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#include <shobjidl.h>
-#endif
+#include "SceneOpening.h"
 
 namespace usdprep_addon {
 
@@ -29,6 +26,31 @@ constexpr const char* kAddonId = "UsdPrep";
 
 // 0 = .usdc, 1 = .abc, 2 = .obj - the order of the format list.
 const char* FormatExtension(int format) { return format == 1 ? ".abc" : format == 2 ? ".obj" : ".usdc"; }
+
+// The geometry slider: its stops, what each keeps of the polygons, and
+// how it is labelled. 0 = as it is.
+constexpr int kGeometrySteps = 6;
+const double kGeometryRatios[kGeometrySteps] = {0.0, 0.5, 0.25, 0.1, 0.04, 0.01};
+const char* const kGeometryLabels[kGeometrySteps] = {"As it is",
+                                                     "1/2 of the polygons",
+                                                     "1/4 of the polygons",
+                                                     "1/10 of the polygons",
+                                                     "1/25 of the polygons",
+                                                     "1/100 of the polygons"};
+
+// The stop nearest to a recipe's ratio, measured the way the stops are
+// spaced: by how many times fewer polygons.
+int GeometryStepFor(double ratio) {
+    if (!(ratio > 0.0)) return 0;
+    int best = 1;
+    for (int step = 2; step < kGeometrySteps; ++step) {
+        if (std::fabs(std::log(ratio / kGeometryRatios[step])) <
+            std::fabs(std::log(ratio / kGeometryRatios[best]))) {
+            best = step;
+        }
+    }
+    return best;
+}
 
 // The three buttons that matter are found before anything is read:
 // bigger than the rest, and each in its own colour.
@@ -72,92 +94,6 @@ std::string HumanSize(uint64_t bytes) {
     return buffer;
 }
 
-#ifdef _WIN32
-
-std::string WideToUtf8(const wchar_t* w) {
-    if (!w || !*w) return {};
-    const int size = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
-    if (size <= 1) return {};
-    std::string out(static_cast<size_t>(size - 1), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, w, -1, &out[0], size, nullptr, nullptr);
-    return out;
-}
-
-std::wstring Utf8ToWide(const std::string& s) {
-    if (s.empty()) return {};
-    const int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
-    std::wstring out(static_cast<size_t>(size), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &out[0], size);
-    return out;
-}
-
-bool EnsureCom() {
-    static const bool initialized = [] {
-        const HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-        return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
-    }();
-    return initialized;
-}
-
-// Runs a shown file dialog to its result path. Empty = cancelled.
-std::string DialogResult(IFileDialog* dialog) {
-    std::string result;
-    if (SUCCEEDED(dialog->Show(nullptr))) {
-        IShellItem* item = nullptr;
-        if (SUCCEEDED(dialog->GetResult(&item))) {
-            PWSTR path = nullptr;
-            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
-                result = WideToUtf8(path);
-                CoTaskMemFree(path);
-            }
-            item->Release();
-        }
-    }
-    return result;
-}
-
-// Native "Save as...". False = cancelled.
-bool NativeSaveDialog(const std::string& suggestedName, int format, std::string& outPath) {
-    if (!EnsureCom()) return false;
-    IFileSaveDialog* dialog = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&dialog)))) {
-        return false;
-    }
-    // Both formats Nuke was measured to read: USD, and .obj for its classic 3D.
-    const COMDLG_FILTERSPEC filters[] = {{L"USD for Nuke (*.usdc)", L"*.usdc"},
-                                         {L"Alembic for older Nuke (*.abc)", L"*.abc"},
-                                         {L"OBJ for older Nuke (*.obj)", L"*.obj"}};
-    dialog->SetFileTypes(3, filters);
-    dialog->SetFileTypeIndex(format + 1);
-    dialog->SetDefaultExtension(format == 1 ? L"abc" : format == 2 ? L"obj" : L"usdc");
-    const std::wstring suggested = Utf8ToWide(suggestedName);
-    if (!suggested.empty()) dialog->SetFileName(suggested.c_str());
-    const std::string result = DialogResult(dialog);
-    dialog->Release();
-    if (result.empty()) return false;
-    outPath = result;
-    return true;
-}
-
-// Native "Open" for a recipe file. False = cancelled.
-bool NativeOpenRecipeDialog(std::string& outPath) {
-    if (!EnsureCom()) return false;
-    IFileOpenDialog* dialog = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&dialog)))) {
-        return false;
-    }
-    const COMDLG_FILTERSPEC filters[] = {{L"Recipe (*.json)", L"*.json"}};
-    dialog->SetFileTypes(1, filters);
-    const std::string result = DialogResult(dialog);
-    dialog->Release();
-    if (result.empty()) return false;
-    outPath = result;
-    return true;
-}
-
-#endif  // _WIN32
 
 }  // namespace
 
@@ -197,10 +133,7 @@ void ExportPanel::ChoosePreset(int choice, const std::string& recipePath) {
                   : _recipe.maxTextureSize >= 1024 ? 4
                   : _recipe.maxTextureSize > 0    ? 5
                                                   : 0;
-    _geometry = _recipe.simplifyRatio <= 0.0  ? 0
-                : _recipe.simplifyRatio > 0.35 ? 1
-                : _recipe.simplifyRatio > 0.17 ? 2
-                                               : 3;
+    _geometry = GeometryStepFor(_recipe.simplifyRatio);
     _includeLights =
         std::find(_recipe.dropTypes.begin(), _recipe.dropTypes.end(), "light") == _recipe.dropTypes.end();
     _dropGuideProxy = std::find(_recipe.dropPurposes.begin(), _recipe.dropPurposes.end(), "guide") !=
@@ -375,9 +308,10 @@ void ExportPanel::DrawDestination(const UsdStageRefPtr& stage, const std::vector
     }
     if (_outputPath[0] == '\0' && !targets.empty()) {
         std::string dir = usdtweak::GetAddonString(kAddonId, "lastDir", "");
-        if (dir.empty() && stage && stage->GetRootLayer()) {
-            const std::string realPath = stage->GetRootLayer()->GetRealPath();
-            if (!realPath.empty()) dir = DirectoryOf(realPath);
+        if (dir.empty() && stage) {
+            // next to the file the artist opened (a converted OBJ lives in a temporary folder)
+            const std::string source = SourcePathOf(stage);
+            if (!source.empty()) dir = DirectoryOf(source);
         }
         if (dir.empty()) dir = ".";
         std::string name = targets.front().GetName();
@@ -514,17 +448,21 @@ void ExportPanel::DrawAdvanced() {
                           "the originals stay as they are.");
     }
 
+    // Six stops on one slider: dragging from "as it is" to a hundredth
+    // reads as "less and less", which a list of fractions does not.
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Geometry");
     ImGui::SameLine();
-    const char* geometryChoices[] = {"As it is", "Half the polygons", "A quarter of the polygons",
-                                     "A tenth of the polygons"};
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::Combo("##geometry", &_geometry, geometryChoices, 4);
+    // the label is the slider's printf format: none of them may contain a percent sign
+    ImGui::SliderInt("##geometry", &_geometry, 0, kGeometrySteps - 1, kGeometryLabels[_geometry],
+                     ImGuiSliderFlags_NoInput | ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Decimates dense meshes, keeping UVs and normals as well as it can.\n"
-                          "Never on by itself - a comp rarely needs it, and it changes the\n"
-                          "shape. The result is triangles.");
+                          "Never on by itself - it changes the shape. The result is triangles;\n"
+                          "meshes under 500 polygons are left as they are.\n\n"
+                          "1/25 and 1/100 are for scans and photogrammetry: millions of\n"
+                          "polygons where the comp needs a light stand-in.");
     }
 
     // Off by default because it causes trouble in Nuke; switched on, what
@@ -586,8 +524,7 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     if (_animation == 2) options.staticFrame = _staticFrame;
     static const int kCaps[] = {0, 8192, 4096, 2048, 1024, 512};
     options.maxTextureSize = kCaps[_textureCap];
-    static const double kRatios[] = {0.0, 0.5, 0.25, 0.1};
-    options.simplifyRatio = kRatios[_geometry];
+    options.simplifyRatio = kGeometryRatios[_geometry];
     // the switches beat the recipe, both ways
     options.dropPurposes.erase(
         std::remove_if(options.dropPurposes.begin(), options.dropPurposes.end(),
@@ -611,7 +548,14 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
 
     const std::string stagePath = stage->GetRootLayer()->GetRealPath();
     const auto t0 = std::chrono::steady_clock::now();
-    const usdprep::Report rep = usdprep::ExtractPrims(stagePath, options);
+    usdprep::Report rep;
+    try {
+        rep = usdprep::ExtractPrims(stagePath, options);
+    } catch (const std::exception& e) {
+        rep.Fail(std::string("unexpected error: ") + e.what());
+    } catch (...) {
+        rep.Fail("unexpected error");
+    }
     const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
     _resultOk = rep.ok;

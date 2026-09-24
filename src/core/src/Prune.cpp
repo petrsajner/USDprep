@@ -129,6 +129,7 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         rep.Fail("cannot reopen flattened layer: " + tmpPath);
         return;
     }
+    ForgetImportSource(flat);
     ExposedPrototypes prototypes(flat);  // kept instancing: the passes below reach into it
     for (const SdfPath& p : roots) {
         const UsdPrim prim = flat->GetPrimAtPath(p);
@@ -189,7 +190,9 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
         }
     }
     prototypes.Restore();
-    flat->Save();
+    SaveCompact(flat, tmpPath);
+    flat = nullptr;  // closed, so that the packed file can take its place
+    SwapInPacked(tmpPath);
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
                    options.maxTextureSize,

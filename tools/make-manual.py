@@ -144,8 +144,10 @@ story += [Spacer(1, 4 * mm),
 story += [p("1  Quick start", H1),
           p("Five steps from a production scene to geometry in your comp.")]
 story += steps([
-    "<b>Open the scene</b> with <i>File &gt; Open</i> (<font face='Courier'>.usd, .usda, .usdc</font> or "
-    "<font face='Courier'>.usdz</font>). The scene is never modified - USDprep only reads it.",
+    "<b>Open the scene</b> with <i>File &gt; Open</i> - the usual Windows dialog, so network drives, DFS "
+    "shares and a pasted path all work. A USD scene (<font face='Courier'>.usd, .usda, .usdc, .usdz</font>) "
+    "or an <font face='Courier'>.obj</font>, which is converted on the way in (see <i>Scans and OBJ files</i> "
+    "below). Dropping the file on the window works too. The file is never modified - USDprep only reads it.",
     "<b>Pick the object.</b> Click it in the 3D view, or click its name in the list on the right. "
     "It turns yellow in both places. One click takes the whole object with everything inside it.",
     "<b>Check the name and place</b> in <i>Save as</i>. USDprep suggests the object's name, in the folder you "
@@ -159,6 +161,25 @@ story += picture("app_start.png", WIDTH, "USDprep after opening a scene: the 3D 
                                          "<i>Prep for Nuke</i> panel on the right. Nothing is selected yet.")
 story += [p("That is the whole workflow. The rest of this manual explains the choices you can make on the way, "
             "what USDprep changes in the file and why, and what to do with an older Nuke."),
+          p("Scans and OBJ files", H2),
+          p("An <font face='Courier'>.obj</font> - a lidar or photogrammetry scan, a model from another "
+            "application - is converted to a temporary USD file when you open it; a progress window shows how far "
+            "it got. From then on it is a scene like any other: pick objects, reduce them, export them. The "
+            "original file is only read, never changed."),
+          p("Every object or group of the OBJ becomes an object in the list, with its polygons as they are, its "
+            "UVs, normals and vertex colours, and the materials of its <font face='Courier'>.mtl</font> file with "
+            "their textures (colour, opacity, roughness, metallic, emission and normal maps). A texture path "
+            "written on another computer is looked for next to the <font face='Courier'>.mtl</font>. The panel "
+            "header says <i>converted</i>; hover over it for what the conversion found and what it had to leave "
+            "out (lines and points, for example)."),
+          p("A scan at survey coordinates - millions of units from the origin - keeps its exact place in the "
+            "exported file. The 3D view, which cannot draw that far out precisely, shows it at the origin instead "
+            "and says <i>shown at the origin</i>."),
+          p("To turn a heavy scan into a light stand-in for the comp, use the <b>Geometry</b> slider under "
+            "<i>Advanced</i>: <i>1/25</i> and <i>1/100</i> of the polygons are there for exactly this. "
+            "A two-million-polygon scan reduced to a hundredth takes a few seconds and keeps its texture."),
+          p("The conversion is kept while the program runs, so opening the same file again is immediate; it is "
+            "cleaned up the next time USDprep starts.", SMALL),
           p("USDprep and usdtweak", H2),
           p("USDprep is built on top of <b>usdtweak</b>, an open-source USD editor by Cyril Pichard, and it is "
             "made for one job: getting USD scenes into Nuke. It always starts the same way - the 3D view and the "
@@ -303,8 +324,10 @@ story += [table([
                   "<i>Everything</i> keeps every sample.", "Shot range"],
     ["Textures", "Scales textures larger than the chosen size down - in the exported copy only, the originals "
                  "are never touched.", "At most 4K"],
-    ["Geometry", "Reduces the number of polygons of dense objects (half, a quarter, a tenth), keeping the UVs. "
-                 "It changes the shape slightly and is never on by itself.", "As it is"],
+    ["Geometry", "A slider with six stops: as it is, 1/2, 1/4, 1/10, 1/25 and 1/100 of the polygons. Reduces "
+                 "dense objects, keeping UVs and normals as well as it can; 1/25 and 1/100 are for scans. It "
+                 "changes the shape and is never on by itself. Objects under 500 polygons stay as they are.",
+     "As it is"],
     ["Include lights", "Off by default: with a light in the file Nuke stops showing objects in their plain "
                        "colours and the picture goes dark. On: the light types Nuke can use come along; the "
                        "others become axes of the same name in the same place, so you can rebuild them.", "off"],
@@ -371,6 +394,11 @@ story += [table([
                                         "driver from NVIDIA, AMD or Intel. A computer that runs Nuke 16 or 17 "
                                         "is new enough."],
     ["I am lost in the 3D view", "Press <b>A</b>."],
+    ["A file on a network drive does not open", "USDprep opens files through the Windows dialog: if Windows "
+                                                "Explorer can open the folder, USDprep can. When a file cannot "
+                                                "be read, a window says why."],
+    ["An exported object has no material", "Export again with this version: the materials an object uses now "
+                                           "come along even when they live elsewhere in the scene."],
 ], [48 * mm, WIDTH - 48 * mm])]
 story += [PageBreak()]
 
@@ -384,6 +412,7 @@ story += [p("usdcut extract scene.usd /World/Set/Car -o car.usdc --preset nuke<b
             "usdcut extract scene.usd /World/Char/Hero -o hero.abc --preset nuke --frames 1001-1080<br/>"
             "usdcut extract scene.usd /World/Set/Car -o car.obj --preset nuke --frame 1010<br/>"
             "usdcut select  scene.usd --name \"*door*\" --topmost<br/>"
+            "usdcut extract scan.obj /scan -o scan_small.usdc --preset nuke --simplify 0.01<br/>"
             "usdcut inspect scene.usd<br/>"
             "usdcut presets nuke &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(prints the preset as JSON - the start of "
             "your own recipe)<br/>"

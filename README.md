@@ -14,6 +14,10 @@ textures and animation. Every conversion is based on what Nuke 16.1 and
 17.0 were *measured* to read ([NUKE_COMPAT.md](NUKE_COMPAT.md)), and each
 one is named in the export report.
 
+Scans and models come in as `.obj` too: converted to USD on opening, then
+picked and reduced like any scene - down to a hundredth of the polygons
+for a light stand-in of a lidar or photogrammetry scan.
+
 - **Download:** the installer is on the [Releases](https://github.com/petrsajner/USDprep/releases) page
   (Windows, per-user, no admin rights, nothing else to install).
 - **User manual:** [docs/manual/USDprep_User_Manual.pdf](docs/manual/USDprep_User_Manual.pdf)
@@ -72,6 +76,7 @@ ctest --test-dir build -C RelWithDebInfo --output-on-failure
 
 ```
 usdcut extract scene.usd /World/Set/Car -o car.usdc --preset nuke --report car.json
+usdcut extract scan.obj /scan -o scan_small.usdc --preset nuke --simplify 0.01
 usdcut prune scene.usd --except /World/Set/Car,/World/Cameras/shotCam -o shot_min.usdc
 usdcut prune scene.usd --drop /World/Lights -o no_lights.usdc
 usdcut prune scene.usd --drop-type light --drop-purpose guide,proxy -o clean.usdc

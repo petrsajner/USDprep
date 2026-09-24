@@ -15,6 +15,7 @@
 // subdivision scheme - a decimated cage is not a cage.
 #include "Shared.h"
 
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <unordered_map>
@@ -500,10 +501,12 @@ void SimplifyMeshes(Report& rep, const UsdStageRefPtr& flat, double ratio, size_
     }
 
     if (done > 0) {
-        const int percent = facesBefore ? static_cast<int>(100.0 * facesAfter / facesBefore) : 100;
+        // a hundredth reads "1 %", not "0 %": below ten, one decimal
+        const double percent = facesBefore ? 100.0 * static_cast<double>(facesAfter) / facesBefore : 100.0;
+        char share[32];
+        std::snprintf(share, sizeof(share), percent < 10.0 ? "%.1f" : "%.0f", percent);
         rep.Info("simplify", std::to_string(done) + " mesh(es) reduced from " + std::to_string(facesBefore) +
-                                 " to " + std::to_string(facesAfter) + " triangles (" + std::to_string(percent) +
-                                 " %)");
+                                 " to " + std::to_string(facesAfter) + " triangles (" + share + " %)");
     }
     for (const auto& entry : skipped) {
         rep.Warn("simplify", std::to_string(entry.second) + " mesh(es) left as they are: " + entry.first);

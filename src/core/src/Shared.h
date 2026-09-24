@@ -35,6 +35,9 @@
 #include <pxr/usd/usd/stage.h>
 #include <pxr/imaging/hio/image.h>
 #include <pxr/imaging/hio/types.h>
+#include <pxr/usd/usdGeom/gprim.h>
+#include <pxr/usd/usdGeom/subset.h>
+#include <pxr/usd/usdShade/connectableAPI.h>
 #include <pxr/usd/usdShade/material.h>
 #include <pxr/usd/usdShade/materialBindingAPI.h>
 #include <pxr/usd/usdShade/shader.h>
@@ -234,6 +237,104 @@ private:
     SdfLayerHandle _layer;
     std::vector<SdfPath> _paths;
 };
+
+// A .usdc saved over itself appends: the arrays it held stay in the file, so
+// a mesh decimated to a hundredth or a subtree pruned away does not make the
+// file any smaller. The post-passes therefore write the layer anew next to
+// it; SwapInPacked() puts that in place once the stage is closed (Windows
+// does not replace a file that is still mapped).
+inline std::string PackedPathFor(const std::string& tmpPath) { return tmpPath + ".packed.usdc"; }
+
+inline bool SaveCompact(const UsdStageRefPtr& flat, const std::string& tmpPath) {
+    if (!HasExtension(tmpPath, ".usdc")) {
+        flat->Save();  // text is written whole anyway
+        return true;
+    }
+    return flat->GetRootLayer()->Export(PackedPathFor(tmpPath));
+}
+
+inline void SwapInPacked(const std::string& tmpPath) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const std::string packed = PackedPathFor(tmpPath);
+    if (!fs::exists(packed, ec)) return;
+    fs::remove(tmpPath, ec);
+    fs::rename(packed, tmpPath, ec);
+    if (ec) fs::remove(packed, ec);  // the appended file stays: bigger, but complete
+}
+
+// Materials the selected objects use that live elsewhere in the scene (a
+// Looks or Materials scope beside the geometry, as in an OBJ turned into
+// USD): without them the objects come out grey. Bound directly or
+// inherited, for every purpose, with the shader nodes their networks reach
+// outside the material.
+inline std::vector<SdfPath> MaterialsFromOutside(const UsdStageRefPtr& stage, const std::vector<SdfPath>& roots) {
+    const auto inside = [&](const SdfPath& path) {
+        for (const SdfPath& root : roots) {
+            if (path.HasPrefix(root)) return true;
+        }
+        return false;
+    };
+    std::set<SdfPath> found;
+    std::vector<SdfPath> pending;
+    // The binding relationships are read as they are written - on the prim or
+    // an ancestor, the nearest one per purpose - rather than through
+    // ComputeBoundMaterial, which warns about every older file that binds
+    // without applying MaterialBindingAPI.
+    const TfToken relationships[] = {TfToken("material:binding"), TfToken("material:binding:preview"),
+                                     TfToken("material:binding:full")};
+    for (const SdfPath& root : roots) {
+        const UsdPrim top = stage->GetPrimAtPath(root);
+        if (!top) continue;
+        for (const UsdPrim& prim : UsdPrimRange(top, UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
+            if (!prim.IsA<UsdGeomGprim>() && !prim.IsA<UsdGeomSubset>()) continue;
+            for (const TfToken& name : relationships) {
+                for (UsdPrim at = prim; at && !at.IsPseudoRoot(); at = at.GetParent()) {
+                    const UsdRelationship binding = at.GetRelationship(name);
+                    SdfPathVector targets;
+                    if (!binding || !binding.GetForwardedTargets(&targets) || targets.empty()) continue;
+                    const SdfPath path = targets.front().GetPrimPath();
+                    if (!inside(path) && stage->GetPrimAtPath(path) && found.insert(path).second) {
+                        pending.push_back(path);
+                    }
+                    break;  // the nearest binding wins
+                }
+            }
+        }
+    }
+    // shader networks may reach out of the material (a shared node graph)
+    const auto covered = [&](const SdfPath& path) {
+        if (inside(path)) return true;
+        for (const SdfPath& known : found) {
+            if (path.HasPrefix(known)) return true;
+        }
+        return false;
+    };
+    while (!pending.empty()) {
+        const SdfPath next = pending.back();
+        pending.pop_back();
+        const UsdPrim prim = stage->GetPrimAtPath(next);
+        if (!prim) continue;
+        for (const UsdPrim& node : UsdPrimRange(prim)) {
+            const UsdShadeConnectableAPI connectable(node);
+            if (!connectable) continue;
+            std::vector<UsdShadeInput> inputs = connectable.GetInputs();
+            std::vector<UsdShadeOutput> outputs = connectable.GetOutputs();
+            std::vector<UsdAttribute> attributes;
+            for (const UsdShadeInput& input : inputs) attributes.push_back(input.GetAttr());
+            for (const UsdShadeOutput& output : outputs) attributes.push_back(output.GetAttr());
+            for (const UsdAttribute& attribute : attributes) {
+                SdfPathVector sources;
+                attribute.GetConnections(&sources);
+                for (const SdfPath& source : sources) {
+                    const SdfPath owner = source.GetPrimPath();
+                    if (!covered(owner) && found.insert(owner).second) pending.push_back(owner);
+                }
+            }
+        }
+    }
+    return std::vector<SdfPath>(found.begin(), found.end());
+}
 
 inline void DropCategoriesFromStage(Report& rep, const UsdStageRefPtr& flat,
                                     const std::vector<std::string>& types,
@@ -525,6 +626,21 @@ inline void StripDrawModeCards(Report& rep, const UsdStageRefPtr& flat) {
 // NukeCompat.cpp: what is left after the recipe, made readable for Nuke -
 // converted or replaced, never dropped, and every substitution reported.
 void MakeNukeReadable(Report& rep, const UsdStageRefPtr& flat);
+
+// An imported scene (Import.h) carries the path of the file it was made
+// from. The files made from it are not that file: the note stays behind.
+inline bool HasImportSource(const UsdStageRefPtr& stage) {
+    return stage && stage->GetRootLayer()->GetCustomLayerData().count("usdprep:importedFrom") > 0;
+}
+inline void ForgetImportSource(const UsdStageRefPtr& flat) {
+    VtDictionary data = flat->GetRootLayer()->GetCustomLayerData();
+    if (data.erase("usdprep:importedFrom") == 0) return;
+    if (data.empty()) {
+        flat->GetRootLayer()->ClearCustomLayerData();
+    } else {
+        flat->GetRootLayer()->SetCustomLayerData(data);
+    }
+}
 
 // UdimAtlas.cpp: stitch every multi-tile UDIM set a UsdUVTexture reads
 // into one image under `atlasDir` and put a UsdTransform2d in front of

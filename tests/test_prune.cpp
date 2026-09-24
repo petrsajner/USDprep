@@ -32,7 +32,9 @@ int main() {
         usdprep::StageInfo info = usdprep::InspectStage(options.outputPath, &err);
         CHECK(err.empty());
         CHECK(info.counts.meshes == 1);
-        CHECK(info.counts.materials == 0);  // Looks scope is outside the mask
+        // the Looks scope is outside the selection, but the Cube is bound to
+        // CubeMaterial there: that one comes along, nothing else from Looks
+        CHECK(info.counts.materials == 1);
     }
 
     // --- drop-selection: Clutter and Looks are removed, the rest stays ---

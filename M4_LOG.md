@@ -230,3 +230,79 @@ the middle 80 % on each axis, grown by a typical object's size
 (`FrameCameraOnBox(box, cutaway)` in the usdtweak patch) so a room is
 seen from the inside. Checked on ALab: the lab with its benches and the
 character, not the garden.
+
+## 0.9.1 - opening files, OBJ import, a hundredth of the polygons (2026-09-24)
+
+Three requests from use in production (Petr, in New Zealand):
+
+**Decimation for scans.** The Geometry choice is now a slider with six
+stops - as it is, 1/2, 1/4, 1/10, 1/25, 1/100 (`ExportPanel.cpp`). A
+recipe's ratio lands on the nearest stop by the log of the ratio.
+Measured on a 2 M-triangle scan with 625 UV charts: 1/100 is reached
+exactly, in ~3 s, and renders cleanly in Nuke (NUKE_COMPAT.md, fourth
+measurement).
+
+**Opening files crashed the program on the studio's DFS drive**, while
+the same folders mapped straight from the server worked. The likely
+cause (not reproduced here - see the last point): usdtweak's own file
+browser asked the file system about every entry of a folder with
+`std::filesystem` calls that throw on any error, sorted with a
+comparator that asked the network again at every comparison, and read
+each row's date through the network every frame. A DFS link is a reparse
+point the client must follow to its target; when that fails, a throw
+ends the program, and a sort whose answers change is undefined behaviour.
+Changes:
+
+- *File > Open* is the Windows dialog now (`NativeDialogs.cpp`, the
+  `onOpenDialog` hook in the usdtweak patch): it reads every drive
+  Explorer reads, takes a pasted path, remembers its folder.
+- usdtweak's browser (still used by its other dialogs) lists a folder
+  once, with error codes: an entry that cannot be asked about is shown
+  as what the listing says it is, a folder that cannot be read shows the
+  reason, sorting and drawing use the answers in hand, a pasted path may
+  come in quotes, and network drives are not asked for their volume name
+  at start-up.
+- Every file-system call in our code that could throw on a network error
+  uses error codes now; the export and the import worker catch whatever
+  is left and report it instead of closing the program.
+- Not the cause, found on the way: the machine's legacy code page (1252)
+  would have made `path::string()` throw on names such as "Předávka" or
+  "Tāmaki", but usdtweak switches its C runtime to UTF-8 at start-up, so
+  the program itself never did; usdcut would have misread such paths. Both executables and the
+  tests now carry a manifest with `activeCodePage` UTF-8 and
+  `longPathAware` (`src/windows/usdprep.manifest`).
+- Could not be reproduced here: no DFS namespace (and no symbolic-link
+  or admin rights to fake one). To be confirmed on the studio drive.
+
+**OBJ import.** An `.obj` is converted to a temporary `.usdc`
+(`%TEMP%\USDprep\import`, reused while the source is unchanged, cleared
+at the next start) in a background thread with a progress window, then
+opened (`SceneOpening.cpp`, the `onOpenStage` / `onFrame` / `onDropFile`
+hooks). The converter (`ObjImport.cpp`, also behind `usdcut` for any
+command given an .obj) streams the file in 16 MB blocks and parses with
+`std::from_chars`: 135 MB in about a second. Objects and groups become
+meshes; polygons stay polygons; UVs, normals and vertex colours come
+along (per point where they agree, indexed per corner where they do
+not); the .mtl becomes UsdPreviewSurface with its maps; per-face
+materials become GeomSubsets; texture paths written on another machine
+are found next to the .mtl; lines, points and free-form geometry are
+reported. Survey coordinates keep their place through a double translate
+on the root.
+
+Two older faults surfaced with it, both in 0.9.0 already:
+
+- **An object exported alone lost its material** when the material lived
+  elsewhere in the scene (a Looks scope beside the geometry - how every
+  imported OBJ is built, and many pipelines). Extract now adds the
+  materials the selection is bound to, and the shader nodes their
+  networks reach, to the population mask (`MaterialsFromOutside`).
+- **Reduced files did not get smaller.** A `.usdc` saved over itself
+  appends: a scan decimated to a hundredth still carried its full arrays
+  (33 MB instead of 0.5 MB) whenever the relink step did not happen to
+  rewrite the file. The post-passes now write the layer anew and swap it
+  in (`SaveCompact` / `SwapInPacked`).
+
+Also: the report shows small shares with a decimal ("1.0 %" rather than
+"0 %"); an .obj/.abc export warns when world-space floats lose detail far
+from the origin; dropping a USD or OBJ file on the window opens it as a
+scene; a file that cannot be opened says so.

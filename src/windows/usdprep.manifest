@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Linked into USDprep.exe, usdcut.exe and the tests (Windows only).
+
+  activeCodePage UTF-8: every narrow string in this process is UTF-8 -
+  what USD, ImGui and our own code already assume. Without it Windows
+  uses the machine's legacy code page (1252 on an English Windows), and
+  a folder called "Předávka" is either unreadable (the file browser
+  crashed on it) or silently misnamed. Needs Windows 10 1903 or later.
+
+  longPathAware: paths longer than 260 characters work where the machine
+  allows them (deep project trees on network shares).
+-->
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>

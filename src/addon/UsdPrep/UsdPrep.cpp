@@ -26,6 +26,7 @@
 
 #include "ExportPanel.h"
 #include "OutputPath.h"
+#include "SceneOpening.h"
 #include "SceneOverview.h"
 #include "SceneTree.h"
 
@@ -151,8 +152,10 @@ void DrawPrepPanel() {
     const UsdStageRefPtr stage = usdtweak::GetCurrentStage();
     KeepContentBrowserHidden(stage);
     if (!stage) {
-        ImGui::TextWrapped("Open a USD scene (File > Open), then pick the objects you want "
-                           "to take out - here in the tree or by clicking them in the 3D view.");
+        ImGui::TextWrapped("Open a scene with File > Open - USD, or an OBJ (a scan, a model), which is "
+                           "converted to USD on opening. You can also drop the file on this window. "
+                           "Then pick the objects you want to take out - here in the tree or by "
+                           "clicking them in the 3D view.");
         return;
     }
 
@@ -162,12 +165,46 @@ void DrawPrepPanel() {
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * kPanelFontScale);
 
     // ----- header --------------------------------------------------------
-    std::string sceneName = stage->GetRootLayer() ? stage->GetRootLayer()->GetDisplayName() : "";
+    // the file the artist opened - for a converted OBJ, the OBJ
+    const bool imported = IsImported(stage);
+    std::string sceneName = imported ? BasenameOf(SourcePathOf(stage))
+                                     : stage->GetRootLayer() ? stage->GetRootLayer()->GetDisplayName() : "";
     if (sceneName.empty()) sceneName = "untitled scene";
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(sceneName.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", SourcePathOf(stage).c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("%d objects", ObjectCount(stage));
+    if (imported) {
+        const std::string& notes = ImportNotesOf(stage);
+        int warnings = 0;
+        for (size_t at = notes.find("warning:"); at != std::string::npos; at = notes.find("warning:", at + 1)) {
+            ++warnings;
+        }
+        ImGui::SameLine();
+        if (warnings > 0) {
+            ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "converted - %d note(s)", warnings);
+        } else {
+            ImGui::TextDisabled("converted");
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Converted to USD on opening, into a temporary file.\n"
+                              "The original is only read, never changed.\n\n%s",
+                              notes.c_str());
+        }
+        GfVec3d position(0.0);
+        if (ShownAtOrigin(stage, &position)) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("shown at the origin");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("The scan sits at %.3f, %.3f, %.3f - so far from the origin that the\n"
+                                  "3D view, which draws in single precision, would show it as coarse\n"
+                                  "blocks. The view therefore shows it at the origin.\n\n"
+                                  "The exported file keeps the real position.",
+                                  position[0], position[1], position[2]);
+            }
+        }
+    }
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
                     ImGui::CalcTextSize("Clear selection").x - ImGui::GetStyle().FramePadding.x * 2.0f);
     const std::vector<SdfPath> roots = SceneTree::ExportRoots(stage);
@@ -239,7 +276,15 @@ TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, UsdPrep) {
     addon.defaultOpen = true;
     addon.draw = &DrawPrepPanel;
     addon.onStartup = &StartTidy;
+    // opening files: the system's dialog, OBJ converted on the way in, a word when it fails
+    addon.onFrame = &OnFrame;
+    addon.onOpenDialog = &OnOpenDialog;
+    addon.onOpenStage = &OnOpenStage;
+    addon.onDropFile = &OnDropFile;
     UsdTweakAddonRegistry::GetInstance().Add(std::move(addon));
+
+    // before any scene is opened (the command line opens them right after this)
+    ForgetOldImports();
 
     // Help > About: the product first, then what it is built on.
     usdtweak::AddAboutLine("USDprep " USDPREP_VERSION_STRING " - USD scenes made ready for Nuke");

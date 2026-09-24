@@ -173,6 +173,33 @@ first probe gave it intensity 3; on UsdLux's scale a distant light's
 default is 50000, so 3 is darkness. At that scale Nuke lights the scene
 with it, direction and falloff right. It is kept as a light now.
 
+## Imported OBJ scans, reduced (fourth measurement)
+
+OBJ files are converted to USD on opening (`src/core/src/ObjImport.cpp`)
+and exported like any scene. Measured with a synthetic photogrammetry-like
+scan - 1,000 x 1,000 quads (2 M triangles), UVs cut into 625 charts (seams
+everywhere), vertex colours, one 2K texture, 3,000 floating noise
+triangles - once at the origin and once at survey coordinates (4,512,000 /
+210 / 5,601,000), reduced to 1/10, 1/25 and 1/100
+(`tools/nuke/render_matrix.py`, `testdata/out/import_matrix`):
+
+| Export | Nuke 17.0v1 | Nuke 16.1v4 |
+|---|---|---|
+| far away, full (33 MB) | textured, 1.1 s | identical pixels |
+| far away, 1/10, 1/25, 1/100 (4.7 MB / 1.9 MB / 0.56 MB) | textured, no smearing at the UV seams, 0.3-0.8 s | identical pixels |
+| at the origin, 1/10, 1/25, 1/100 | same pictures as far away | identical pixels |
+| two objects, three materials, one with per-face materials | textured / coloured, the subsets split | identical pixels |
+
+- Survey coordinates: the import stores points around their centre and
+  puts the offset on the root as a **double** translate. Nuke renders that
+  without a trace of float jitter (float points at 4.5 M would sit on a
+  0.5-unit grid). The 3D view of USDprep draws in floats, so it shows such
+  a scan at the origin (session layer only; the export keeps the place).
+- Indexed face-varying UVs (what the import writes for charted UVs, and
+  what ALab's meshes have) are read correctly.
+- The meshoptimizer decimation reaches the requested share even with 625
+  UV charts: 2,003,000 -> 20,029 triangles at 1/100, in about 3 s.
+
 ## What the tool does about it
 
 The rule (Petr, 2026-09-20): stay as close as possible to what a 3D

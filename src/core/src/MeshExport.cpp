@@ -29,6 +29,7 @@
 #include <pxr/base/gf/matrix4d.h>
 #include <pxr/base/gf/vec2f.h>
 #include <pxr/base/gf/vec3f.h>
+#include <pxr/usd/usdGeom/bboxCache.h>
 #include <pxr/usd/usdGeom/mesh.h>
 #include <pxr/usd/usdGeom/primvarsAPI.h>
 #include <pxr/usd/usdGeom/tokens.h>
@@ -184,7 +185,11 @@ void WriteMesh(std::ostream& os, const MeshData& mesh, size_t* vertexBase, size_
     *uvBase += mesh.uvs.size();
 }
 
-std::string NukePath(const fs::path& path) { return fs::absolute(path).generic_string(); }
+std::string NukePath(const fs::path& path) {
+    std::error_code ec;
+    const fs::path absolute = fs::absolute(path, ec);
+    return (ec ? path : absolute).generic_string();
+}
 
 // A name a Nuke node can carry.
 std::string NodeName(const std::string& text) {
@@ -239,6 +244,28 @@ bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& 
     if (items.empty()) {
         rep.Fail("nothing to write: the selection has no mesh geometry");
         return false;
+    }
+    {
+        // World space in floats: a scan at survey coordinates loses its detail here (the
+        // USD export keeps it - points around their centre, the offset in double precision).
+        UsdGeomBBoxCache boxes(UsdTimeCode(first), {UsdGeomTokens->default_, UsdGeomTokens->render});
+        GfRange3d world;
+        for (const Item& item : items) world.UnionWith(boxes.ComputeWorldBound(item.prim).ComputeAlignedRange());
+        if (!world.IsEmpty()) {
+            double farthest = 0.0;
+            for (int i = 0; i < 3; ++i) {
+                farthest = std::max({farthest, std::fabs(world.GetMin()[i]), std::fabs(world.GetMax()[i])});
+            }
+            const double size = world.GetSize().GetLength();
+            if (size > 0.0 && farthest > 1000.0 * size) {
+                const GfVec3d centre = world.GetMidpoint();
+                char where[96];
+                std::snprintf(where, sizeof(where), "%.0f, %.0f, %.0f", centre[0], centre[1], centre[2]);
+                rep.Warn(tag, std::string("the geometry sits far from the origin (around ") + where +
+                                  "): an " + extension + " holds world-space points as floats, and so does Nuke's "
+                                  "classic 3D - out there they lose detail. The USD export keeps it.");
+            }
+        }
     }
 
     // An .obj is one frame. An .abc carries the whole range, unless one
