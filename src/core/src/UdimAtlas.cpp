@@ -159,7 +159,9 @@ void AtlasUdimTextures(Report& rep, const UsdStageRefPtr& flat, const std::strin
             textures.push_back(prim);
         }
     }
-    for (const UsdPrim& prim : textures) {
+    for (size_t i = 0; i < textures.size(); ++i) {
+        StepWithin(0.25f, 0.55f, i, textures.size());  // stitching big tile sets is the slow part of a set
+        const UsdPrim& prim = textures[i];
         const UsdAttribute file = prim.GetAttribute(kFile);
         SdfAssetPath asset;
         if (!file || !file.Get(&asset) || !UsdShadeUdimUtils::IsUdimIdentifier(asset.GetAssetPath())) continue;

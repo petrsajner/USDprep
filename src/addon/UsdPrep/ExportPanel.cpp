@@ -1,10 +1,13 @@
 #include "ExportPanel.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <new>
 #include <string>
+#include <thread>
 
 #include "addons/Api.h"
 #include "Gui.h"
@@ -13,6 +16,7 @@
 #include <pxr/usd/usd/stage.h>
 
 #include <usdprep/Extract.h>
+#include <usdprep/Progress.h>
 
 #include "NativeDialogs.h"
 #include "OutputPath.h"
@@ -96,6 +100,26 @@ std::string HumanSize(uint64_t bytes) {
 
 
 }  // namespace
+
+// ---------------------------------------------------------------------------
+// the export in the background
+// ---------------------------------------------------------------------------
+
+struct ExportPanel::Job {
+    usdprep::Progress progress;
+    std::atomic<bool> finished{false};
+    usdprep::Report report;
+    std::thread worker;
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+    std::string outputPath;
+    int objects = 0;
+
+    ~Job() {
+        // the program is closing in the middle of an export: stop it, then go
+        progress.cancel = true;
+        if (worker.joinable()) worker.join();
+    }
+};
 
 // ---------------------------------------------------------------------------
 // recipe choice
@@ -546,37 +570,109 @@ void ExportPanel::Run(const UsdStageRefPtr& stage, const std::vector<SdfPath>& t
     options.outputPath = _outputPath;
     for (const SdfPath& p : targets) options.primPaths.push_back(p.GetAsString());
 
+    // The export reads the scene from its file, on a thread of its own: it
+    // shares nothing with the scene on screen but the (read-only) layers.
     const std::string stagePath = stage->GetRootLayer()->GetRealPath();
-    const auto t0 = std::chrono::steady_clock::now();
-    usdprep::Report rep;
-    try {
-        rep = usdprep::ExtractPrims(stagePath, options);
-    } catch (const std::exception& e) {
-        rep.Fail(std::string("unexpected error: ") + e.what());
-    } catch (...) {
-        rep.Fail("unexpected error");
-    }
-    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    std::shared_ptr<Job> job = std::make_shared<Job>();
+    job->outputPath = _outputPath;
+    job->objects = static_cast<int>(targets.size());
+    options.progress = &job->progress;
+    Job* running = job.get();
+    job->worker = std::thread([running, options, stagePath] {
+        // an exception out of a thread ends the program: it becomes a failed export
+        try {
+            running->report = usdprep::ExtractPrims(stagePath, options);
+        } catch (const std::bad_alloc&) {
+            running->report.Fail("not enough memory for this export");
+        } catch (const std::exception& e) {
+            running->report.Fail(std::string("unexpected error: ") + e.what());
+        } catch (...) {
+            running->report.Fail("unexpected error");
+        }
+        running->finished = true;
+    });
+    _job = job;
+    _resultLine.clear();
+    _showReport = false;
+}
+
+void ExportPanel::Finish() {
+    _job->worker.join();
+    const usdprep::Report rep = _job->report;
+    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - _job->started).count();
+    const std::string outputPath = _job->outputPath;
+    _job.reset();
 
     _resultOk = rep.ok;
+    _resultCancelled = rep.error == "cancelled";
     _report = rep.ToText();
     char line[512];
     if (rep.ok) {
         std::snprintf(line, sizeof(line), "Done in %.1f s: %d object(s), %d meshes, %s",
                       secs, static_cast<int>(rep.after.prims), static_cast<int>(rep.after.meshes),
                       HumanSize(rep.outputSizeBytes).c_str());
-        const std::string dir = DirectoryOf(_outputPath);
+        const std::string dir = DirectoryOf(outputPath);
         if (dir != ".") {
             usdtweak::SetAddonString(kAddonId, "lastDir", dir);
             usdtweak::PersistSettings();
         }
+    } else if (rep.error == "cancelled") {
+        std::snprintf(line, sizeof(line), "Export stopped - nothing was written.");
     } else {
         std::snprintf(line, sizeof(line), "Failed: %s", rep.error.c_str());
     }
     _resultLine = line;
 }
 
+// Where the green button was: a bar that fills as the export goes, the step
+// it is on, and a light that keeps sweeping across - so that even a long
+// single step (flattening a big set) never looks like a frozen program.
+void ExportPanel::DrawProgress() {
+    Job& job = *_job;
+    const float fraction = std::min(std::max(static_cast<float>(job.progress.fraction), 0.0f), 1.0f);
+    const char* step = job.progress.step;
+    const int seconds = static_cast<int>(
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - job.started).count());
+
+    char overlay[160];
+    std::snprintf(overlay, sizeof(overlay), "%d %%  -  %s", static_cast<int>(fraction * 100.0f + 0.5f),
+                  (step && *step) ? step : "starting");
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float height = ImGui::GetFrameHeight() + style.FramePadding.y * 2.4f;  // as tall as the button
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, kExportColor);
+    ImGui::ProgressBar(fraction, ImVec2(-1.0f, height), overlay);
+    ImGui::PopStyleColor();
+
+    const ImVec2 low = ImGui::GetItemRectMin();
+    const ImVec2 high = ImGui::GetItemRectMax();
+    const float width = high.x - low.x;
+    const float phase = static_cast<float>(std::fmod(ImGui::GetTime() * 0.6, 1.4)) - 0.2f;  // -0.2 .. 1.2
+    const float centre = low.x + width * phase;
+    const float half = width * 0.12f;
+    const ImU32 clear = IM_COL32(255, 255, 255, 0);
+    const ImU32 light = IM_COL32(255, 255, 255, 60);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->PushClipRect(low, high, true);
+    draw->AddRectFilledMultiColor(ImVec2(centre - half, low.y), ImVec2(centre, high.y), clear, light, light, clear);
+    draw->AddRectFilledMultiColor(ImVec2(centre, low.y), ImVec2(centre + half, high.y), light, clear, clear, light);
+    draw->PopClipRect();
+
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f), "Exporting %d object(s) to %s  -  %d:%02d", job.objects,
+                       BasenameOf(job.outputPath).c_str(), seconds / 60, seconds % 60);
+    ImGui::SameLine();
+    if (job.progress.cancel) {
+        ImGui::TextDisabled("stopping...");
+    } else if (ImGui::SmallButton("Cancel")) {
+        job.progress.cancel = true;
+    }
+    ImGui::TextDisabled("The program is working - a big scene can take a few minutes.");
+}
+
 void ExportPanel::DrawRun(const UsdStageRefPtr& stage, const std::vector<SdfPath>& targets) {
+    if (_job) {
+        DrawProgress();
+        return;
+    }
     std::string blocker = ExportBlocker(!targets.empty(), _outputPath);
     if (blocker.empty() && (!stage->GetRootLayer() || stage->GetRootLayer()->GetRealPath().empty())) {
         blocker = "Save the scene as a file first.";
@@ -594,8 +690,11 @@ void ExportPanel::DrawRun(const UsdStageRefPtr& stage, const std::vector<SdfPath
     if (ImGui::IsItemHovered() && !blocker.empty()) ImGui::SetTooltip("%s", blocker.c_str());
 
     if (!_resultLine.empty()) {
-        ImGui::TextColored(_resultOk ? ImVec4(0.6f, 0.9f, 0.6f, 1.0f) : ImVec4(1.0f, 0.5f, 0.4f, 1.0f),
-                           "%s", _resultLine.c_str());
+        // done: green; stopped by the artist: plain; failed: red
+        const ImVec4 color = _resultOk          ? ImVec4(0.6f, 0.9f, 0.6f, 1.0f)
+                             : _resultCancelled ? ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled)
+                                                : ImVec4(1.0f, 0.5f, 0.4f, 1.0f);
+        ImGui::TextColored(color, "%s", _resultLine.c_str());
         if (_resultOk) {
             ImGui::SameLine();
             ImGui::TextDisabled("%s", BasenameOf(_outputPath).c_str());
@@ -618,11 +717,17 @@ void ExportPanel::Draw(const UsdStageRefPtr& stage, const std::vector<SdfPath>& 
     _sceneStart = stage->GetStartTimeCode();
     _sceneEnd = stage->GetEndTimeCode();
 
+    if (_job && _job->finished) Finish();
+
     ImGui::Separator();
+    // while an export runs, its settings are the ones it started with
+    const bool busy = _job != nullptr;
+    if (busy) ImGui::BeginDisabled();
     DrawList(selectionRoots);
     DrawPreset();
     DrawDestination(stage, targets);
     DrawAdvanced();
+    if (busy) ImGui::EndDisabled();
     DrawRun(stage, targets);
 
     _lastHeight = ImGui::GetCursorPosY() - top + ImGui::GetStyle().ItemSpacing.y;

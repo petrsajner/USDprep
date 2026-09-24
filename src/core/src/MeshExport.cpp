@@ -280,6 +280,10 @@ bool ExportMeshFile(Report& rep, const std::string& usdPath, const std::string& 
     }
 
     const MeshSampler sampler = [&](size_t index, double at, MeshData* out) {
+        if (frames.size() > 1) {
+            StepWithin(0.95f, 0.99f, static_cast<size_t>(std::max(0.0, at - frames.front())),
+                       static_cast<size_t>(frames.back() - frames.front()) + 1);
+        }
         UsdGeomXformCache xforms{UsdTimeCode(at)};
         return ReadMesh(items[index].prim, UsdTimeCode(at), xforms, looks[items[index].look], out);
     };

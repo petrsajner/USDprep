@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <pxr/usd/sdf/assetPath.h>
@@ -48,6 +49,7 @@
 #include <pxr/usd/usdUtils/localizeAsset.h>
 #include <pxr/usd/usdUtils/usdzPackage.h>
 
+#include <usdprep/Progress.h>
 #include <usdprep/Report.h>
 #include <usdprep/Select.h>
 #include <usdprep/StageInfo.h>
@@ -56,6 +58,56 @@ namespace usdprep {
 namespace detail {
 
 using namespace pxr;
+
+// ---------------------------------------------------------------- progress
+// The running operation's Progress (Extract sets it for its thread), so
+// that any pass can say what it is doing without every signature carrying
+// it. Nothing happens when there is none.
+inline Progress*& CurrentProgress() {
+    static thread_local Progress* progress = nullptr;
+    return progress;
+}
+
+class ProgressScope {
+public:
+    explicit ProgressScope(Progress* progress) : _previous(CurrentProgress()) { CurrentProgress() = progress; }
+    ~ProgressScope() { CurrentProgress() = _previous; }
+    ProgressScope(const ProgressScope&) = delete;
+    ProgressScope& operator=(const ProgressScope&) = delete;
+
+private:
+    Progress* _previous;
+};
+
+// `what` must be a string literal: the reader may look at it any time.
+inline void Step(const char* what, float at) {
+    if (Progress* progress = CurrentProgress()) {
+        progress->step = what;
+        if (at > progress->fraction) progress->fraction = at;
+    }
+}
+
+// Part `done` of `total` of the stretch between `from` and `to`.
+inline void StepWithin(float from, float to, size_t done, size_t total) {
+    Progress* progress = CurrentProgress();
+    if (!progress || total == 0) return;
+    const float at = from + (to - from) * static_cast<float>(done) / static_cast<float>(total);
+    if (at > progress->fraction) progress->fraction = at;
+}
+
+// One more item of a step whose count is not known ahead: a small part of
+// the way that is left to `to` - it keeps moving and never gets there.
+inline void Nudge(float to) {
+    Progress* progress = CurrentProgress();
+    if (!progress) return;
+    const float at = progress->fraction;
+    if (at < to) progress->fraction = at + (to - at) * 0.04f;
+}
+
+inline bool Cancelled() {
+    const Progress* progress = CurrentProgress();
+    return progress && progress->cancel;
+}
 
 // Everything USD says during a run ends up in the report, grouped, with
 // the known noise turned into one plain sentence — instead of scrolling
@@ -283,21 +335,39 @@ inline std::vector<SdfPath> MaterialsFromOutside(const UsdStageRefPtr& stage, co
     // without applying MaterialBindingAPI.
     const TfToken relationships[] = {TfToken("material:binding"), TfToken("material:binding:preview"),
                                      TfToken("material:binding:full")};
+    // Per relationship, what each prim inherits: a set has thousands of
+    // gprims under the same few ancestors, each asked once.
+    std::unordered_map<SdfPath, SdfPath, SdfPath::Hash> inherited[3];
+    const auto nearestBinding = [&](const UsdPrim& prim, int which) {
+        std::vector<SdfPath> walked;
+        SdfPath bound;
+        for (UsdPrim at = prim; at && !at.IsPseudoRoot(); at = at.GetParent()) {
+            const auto known = inherited[which].find(at.GetPath());
+            if (known != inherited[which].end()) {
+                bound = known->second;
+                break;
+            }
+            walked.push_back(at.GetPath());
+            const UsdRelationship binding = at.GetRelationship(relationships[which]);
+            SdfPathVector targets;
+            if (binding && binding.GetForwardedTargets(&targets) && !targets.empty()) {
+                bound = targets.front().GetPrimPath();  // the nearest binding wins
+                break;
+            }
+        }
+        for (const SdfPath& path : walked) inherited[which][path] = bound;
+        return bound;
+    };
     for (const SdfPath& root : roots) {
         const UsdPrim top = stage->GetPrimAtPath(root);
         if (!top) continue;
         for (const UsdPrim& prim : UsdPrimRange(top, UsdTraverseInstanceProxies(UsdPrimDefaultPredicate))) {
             if (!prim.IsA<UsdGeomGprim>() && !prim.IsA<UsdGeomSubset>()) continue;
-            for (const TfToken& name : relationships) {
-                for (UsdPrim at = prim; at && !at.IsPseudoRoot(); at = at.GetParent()) {
-                    const UsdRelationship binding = at.GetRelationship(name);
-                    SdfPathVector targets;
-                    if (!binding || !binding.GetForwardedTargets(&targets) || targets.empty()) continue;
-                    const SdfPath path = targets.front().GetPrimPath();
-                    if (!inside(path) && stage->GetPrimAtPath(path) && found.insert(path).second) {
-                        pending.push_back(path);
-                    }
-                    break;  // the nearest binding wins
+            for (int which = 0; which < 3; ++which) {
+                const SdfPath path = nearestBinding(prim, which);
+                if (!path.IsEmpty() && !inside(path) && found.count(path) == 0 && stage->GetPrimAtPath(path)) {
+                    found.insert(path);
+                    pending.push_back(path);
                 }
             }
         }
@@ -860,6 +930,7 @@ inline void CapTextures(Report& rep, const std::string& tmpPath, int maxSize) {
         const auto known = copies.find(source);
         if (known != copies.end()) return known->second;
         copies[source] = "";
+        Nudge(0.89f);
         // an atlas was capped tile by tile when it was built
         if (fs::path(source).filename().string().find(".atlas.") != std::string::npos) return "";
         const HioImageSharedPtr image = HioImage::OpenForReading(
@@ -1133,9 +1204,12 @@ inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
         asObj ? (requested.parent_path() / (requested.stem().string() + ".usdprep-source.usdc")).string()
               : requestedPath;
 
+    Step("checking the textures", 0.82f);
     DropMissingDependencies(rep, tmpPath);
+    Step("scaling textures down", 0.84f);
     CapTextures(rep, tmpPath, maxTextureSize);
     NukeReadability(rep, tmpPath, outputPath);
+    Step("copying the textures", 0.89f);
 
     if (HasExtension(outputPath, ".usdz")) {
         if (!UsdUtilsCreateNewUsdzPackage(SdfAssetPath(tmpPath), outputPath)) {
@@ -1156,6 +1230,7 @@ inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
     }
     if (!rep.error.empty()) return;
 
+    Step("checking the result", 0.94f);
     std::string err;
     StageInfo info = InspectStage(outputPath, &err);
     if (!err.empty()) {
@@ -1174,6 +1249,7 @@ inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
         }
     }
     if (asObj) {
+        Step(HasExtension(requestedPath, ".abc") ? "writing the Alembic file" : "writing the OBJ file", 0.95f);
         const bool written = ExportMeshFile(rep, outputPath, requestedPath, frame);
         fs::remove(outputPath, ec);
         if (!written) return;
@@ -1181,6 +1257,7 @@ inline void FinalizeOutput(Report& rep, const std::string& requestedPath,
     rep.outputSizeBytes =
         fs::exists(requestedPath, ec) ? fs::file_size(requestedPath, ec) : 0;
     fs::remove_all(TempDirFor(requestedPath), ec);
+    Step("done", 1.0f);
     rep.ok = true;
 }
 

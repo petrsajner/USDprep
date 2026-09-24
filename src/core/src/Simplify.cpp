@@ -488,7 +488,10 @@ void SimplifyMeshes(Report& rep, const UsdStageRefPtr& flat, double ratio, size_
     size_t facesAfter = 0;
     std::map<std::string, size_t> skipped;
     std::set<std::string> dropped;
-    for (const UsdPrim& prim : meshes) {
+    for (size_t i = 0; i < meshes.size(); ++i) {
+        if (Cancelled()) return;  // the run is being stopped: nothing it writes is kept
+        StepWithin(0.60f, 0.80f, i, meshes.size());
+        const UsdPrim& prim = meshes[i];
         const MeshResult r = SimplifyOne(flat, prim, ratio, minFaces);
         if (r.done) {
             ++done;

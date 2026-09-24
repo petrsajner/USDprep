@@ -29,17 +29,20 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
     }
 
     // Full open for the before-numbers and path validation.
+    Step("opening the scene", 0.0f);
     UsdStageRefPtr full = UsdStage::Open(inputPath, UsdStage::LoadAll);
     if (!full) {
         rep.Fail("cannot open stage: " + inputPath);
         return;
     }
+    Step("counting what is in it", 0.02f);
     rep.before = InspectStage(inputPath).counts;
     const std::vector<SdfPath> roots = ValidatePrimPaths(full, options.primPaths, rep);
     if (!rep.error.empty()) return;
 
     // Masked open: population limited to the requested subtrees - and to the
     // materials they use, wherever in the scene those live.
+    Step("selecting the objects", 0.04f);
     UsdStagePopulationMask mask(roots);
     const std::vector<SdfPath> materials = MaterialsFromOutside(full, roots);
     for (const SdfPath& material : materials) mask.Add(material);
@@ -71,11 +74,24 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
                                  "sets) anchored to their source folder");
     }
 
+    // Stopped on the way: nothing of this run stays behind.
+    const auto stopped = [&]() {
+        if (!Cancelled()) return false;
+        std::error_code ec;
+        std::filesystem::remove_all(TempDirFor(options.outputPath), ec);
+        rep.Fail("cancelled");
+        return true;
+    };
+    if (stopped()) return;
+
+    Step("flattening the scene", 0.08f);
     const std::string tmpPath = TempPathFor(options.outputPath);
     if (!stage->Export(tmpPath, /*addSourceFileComment=*/false)) {
         rep.Fail("failed to export flattened layer to " + tmpPath);
         return;
     }
+    stage = nullptr;  // the masked stage is done with
+    if (stopped()) return;
 
     // Post-pass on the flattened output: drop the categories the recipe
     // asks for, put the materials on their diet, then author defaultPrim
@@ -92,29 +108,43 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
         }
         ForgetImportSource(flat);
         ExposedPrototypes prototypes(flat);  // kept instancing: the passes below reach into it
-        DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
-        StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
-                       options.stripUnusedMaterials, options.udimAtlas);
-    if (options.nukeCompat) MakeNukeReadable(rep, flat);
-    if (options.udimAtlas) {
-        AtlasUdimTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
-                          options.maxTextureSize);
-    }
-    if (options.nukeCompat) {
-        CompensateRawTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures));
-    }
-        if (options.stripDrawModeCards) StripDrawModeCards(rep, flat);
-        TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
-                      options.staticFrame);
-        SimplifyMeshes(rep, flat, options.simplifyRatio);
-        if (options.setDefaultPrim && AuthorDefaultPrim(flat, roots.front())) {
-            rep.Info("defaultPrim",
-                     "set to top-level ancestor of " + roots.front().GetAsString());
+        // each pass is a step; a cancel is heard between them
+        const auto next = [](const char* what, float at) {
+            Step(what, at);
+            return !Cancelled();
+        };
+        if (next("sorting the materials", 0.20f)) {
+            DropCategoriesFromStage(rep, flat, options.dropTypes, options.dropPurposes);
+            StripMaterials(rep, flat, options.materialPurpose, options.stripRenderContexts,
+                           options.stripUnusedMaterials, options.udimAtlas);
         }
-        prototypes.Restore();
-        SaveCompact(flat, tmpPath);
+        if (options.nukeCompat && next("making it readable for Nuke", 0.22f)) MakeNukeReadable(rep, flat);
+        if (options.udimAtlas && next("joining UDIM tiles", 0.25f)) {
+            AtlasUdimTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
+                              options.maxTextureSize);
+        }
+        if (options.nukeCompat && next("correcting data textures", 0.55f)) {
+            CompensateRawTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures));
+        }
+        if (options.stripDrawModeCards && next("removing preview cards", 0.58f)) StripDrawModeCards(rep, flat);
+        if (next("trimming the animation", 0.59f)) {
+            TrimAnimation(rep, flat, options.animation, options.frameStart, options.frameEnd,
+                          options.staticFrame);
+        }
+        if (options.simplifyRatio > 0.0 && next("reducing polygons", 0.60f)) {
+            SimplifyMeshes(rep, flat, options.simplifyRatio);  // 0.60 - 0.80, mesh by mesh
+        }
+        if (next("saving", 0.80f)) {
+            if (options.setDefaultPrim && AuthorDefaultPrim(flat, roots.front())) {
+                rep.Info("defaultPrim",
+                         "set to top-level ancestor of " + roots.front().GetAsString());
+            }
+            prototypes.Restore();
+            SaveCompact(flat, tmpPath);
+        }
     }
-    SwapInPacked(tmpPath);  // the stage is closed now
+    if (stopped()) return;  // the flattened stage is closed now
+    SwapInPacked(tmpPath);
 
     FinalizeOutput(rep, options.outputPath, tmpPath, options.relinkTextures,
                    options.maxTextureSize,
@@ -125,6 +155,7 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
 
 Report ExtractPrims(const std::string& inputPath, const ExtractOptions& options) {
     Report rep;
+    const detail::ProgressScope progress(options.progress);
     {
         // Scoped: the harvest has to land in `rep` before it is returned.
         // A delegate living in the function that returns `rep` harvests

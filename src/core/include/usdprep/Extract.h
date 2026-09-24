@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include <usdprep/Progress.h>
 #include <usdprep/Report.h>
 
 namespace usdprep {
@@ -54,15 +55,18 @@ struct ExtractOptions {
     double frameStart = kStageFrame;
     double frameEnd = kStageFrame;
     double staticFrame = kStageFrame;
+    // Optional: where the run reports how far it is, and where it is told
+    // to stop (it then fails with the error "cancelled" and leaves nothing
+    // behind). Owned by the caller, alive for the whole run.
+    Progress* progress = nullptr;
 };
 
 // Copy the given subtrees (with their ancestors and carried dependencies)
 // into a new standalone, flattened file. The input file is never modified.
 //
-// v0 behavior notes (validated in M0):
-// - Materials living inside the extracted subtrees survive; materials bound
-//   from outside the mask are dropped together with their bindings' targets
-//   (dependency curation is the next milestone).
+// Behaviour notes:
+// - The materials the subtrees are bound to come along, also when they
+//   live elsewhere in the scene, with the shader nodes their networks reach.
 // - .usdz output localizes referenced textures (incl. UDIM tiles) into the
 //   package; .usdc/.usda output copies them into a "<name>_textures" folder
 //   next to the file and rewrites the paths (relinkTextures).

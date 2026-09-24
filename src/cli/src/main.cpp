@@ -9,7 +9,9 @@
 //   usdcut presets [<name>]
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -18,12 +20,14 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <pxr/pxr.h>
 
 #include <usdprep/Extract.h>
 #include <usdprep/Import.h>
+#include <usdprep/Progress.h>
 #include <usdprep/Prune.h>
 #include <usdprep/Recipe.h>
 #include <usdprep/Select.h>
@@ -65,6 +69,8 @@ void PrintUsage() {
         << "  --preset <name>        start from a built-in recipe (usdcut presets)\n"
         << "  --recipe <file.json>   start from a recipe file; later flags win\n"
         << "  --report <file.json>   write the operation report as JSON\n"
+        << "  --progress             extract: print each step with the time it started\n"
+        << "                         (stderr), to see where a long run spends it\n"
         << "  --keep-instancing      do not convert instanceable prims to plain prims\n"
         << "  --no-default-prim      do not author defaultPrim on the output\n"
         << "  --no-relink            .usdc/.usda: leave texture paths pointing at\n"
@@ -172,6 +178,7 @@ void EmitReport(const usdprep::Report& rep, const std::string& jsonPath) {
 struct CommonOptions {
     std::string output;
     std::string reportPath;
+    bool progress = false;
     std::string preset;
     std::string recipePath;
     bool deinstance = true;
@@ -332,6 +339,8 @@ int ParseCommon(const std::vector<std::string>& args, size_t start,
             }
             common.frameEnd = std::strtod(rest + 1, nullptr);
             if (common.animation.empty()) common.animation = "range";
+        } else if (a == "--progress") {
+            common.progress = true;
         } else if (a == "--frame") {
             if (++i >= args.size()) { error = "--frame needs a frame number"; return -1; }
             common.staticFrame = std::strtod(args[i].c_str(), nullptr);
@@ -362,7 +371,32 @@ int RunExtract(const std::vector<std::string>& args) {
     options.primPaths.assign(positionals.begin() + 1, positionals.end());
     SceneInput scene(positionals[0]);
     if (!scene.Prepare()) return 1;
+    // --progress: the steps as they start, timed, on stderr
+    usdprep::Progress progress;
+    std::atomic<bool> done{false};
+    std::thread watcher;
+    if (common.progress) {
+        options.progress = &progress;
+        watcher = std::thread([&progress, &done] {
+            const auto start = std::chrono::steady_clock::now();
+            const char* shown = nullptr;
+            int shownTenth = -1;  // a long step also prints each 10 % it covers
+            while (!done) {
+                const char* step = progress.step;
+                const int tenth = static_cast<int>(progress.fraction * 10.0f);
+                if ((step != shown || tenth != shownTenth) && step && *step) {
+                    shown = step;
+                    shownTenth = tenth;
+                    const double at = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+                    std::fprintf(stderr, "  %7.1f s  %3.0f %%  %s\n", at, 100.0 * progress.fraction, step);
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        });
+    }
     usdprep::Report rep = usdprep::ExtractPrims(scene.Path(), options);
+    done = true;
+    if (watcher.joinable()) watcher.join();
     EmitReport(rep, common.reportPath);
     return rep.ok ? 0 : 1;
 }

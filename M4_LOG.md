@@ -306,3 +306,37 @@ Also: the report shows small shares with a decimal ("1.0 %" rather than
 "0 %"); an .obj/.abc export warns when world-space floats lose detail far
 from the origin; dropping a USD or OBJ file on the window opens it as a
 scene; a file that cannot be opened says so.
+
+### Export progress (0.9.1, second round)
+
+Petr, after testing 0.9.1 on the studio's DFS drive (it works): pressing
+Export froze the window with the button half-pressed, so an artist could
+not tell a working program from a hung one. The export now runs on a
+thread of its own (`ExportPanel::Job`); in place of the button a bar
+shows how far it is, the step it is on and the time, with a light that
+keeps sweeping across it, and a Cancel button. The settings are greyed
+out while it runs. Cancel is heard between steps: the run fails with
+"cancelled" and removes its temporary folder, so nothing is written (a
+step USD cannot interrupt - flattening a big set - finishes first).
+
+The core reports through `usdprep::Progress` (`ExtractOptions::progress`,
+atomic fraction / step / cancel) and a thread-local current progress in
+`Shared.h` (`Step`, `StepWithin`, `Nudge`, `Cancelled`), so the passes did
+not need new parameters. `usdcut extract --progress` prints the steps
+with their start times. The weights come from a profile of the whole
+ALab set to .usdc (296 s):
+
+| Step | Starts at | Took |
+|---|---|---|
+| opening, counting, selecting | 0-4 % | 4 s |
+| flattening the scene | 8 % | 11 s |
+| materials, Nuke conversions | 20-22 % | 0.5 s |
+| joining UDIM tiles (per texture) | 25-55 % | 229 s |
+| data textures, cards, animation, polygons (per mesh) | 55-80 % | 0.5 s |
+| saving | 80 % | 4 s |
+| checking / scaling textures (per file) | 82-89 % | 22 s |
+| copying the textures | 89 % | 23 s |
+| checking the result, done | 94-100 % | 1 s |
+
+The lookup of materials outside the selection now remembers what each
+ancestor binds (the selecting step is the masked open, not the lookup).

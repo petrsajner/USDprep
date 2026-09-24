@@ -245,6 +245,9 @@ story += [side_by_side("panel_export.png", 70 * mm, [
     p("<b>Save as.</b> Type a name or use <i>Browse...</i>. The file extension follows the format below it."),
     p("<b>Format.</b> See the table on this page."),
     p("<b>Advanced</b> holds every individual switch; chapter 5 explains them. You rarely need it."),
+    p("<b>While it exports</b>, a bar takes the place of the button: how far it is, what it is doing and for "
+      "how long. The program stays usable. <b>Cancel</b> stops the export and nothing is written; a step that "
+      "cannot be interrupted (reading a big set) finishes first."),
     p("After the export the line under the button reports the result. <b>Details</b> opens the full report: "
       "everything USDprep did to the file, in plain words. If something in Nuke looks different from what you "
       "expected, the reason is in that report."),

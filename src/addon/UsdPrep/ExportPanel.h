@@ -3,6 +3,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,13 @@ private:
     void DrawRun(const pxr::UsdStageRefPtr& stage, const std::vector<pxr::SdfPath>& targets);
     void ChoosePreset(int choice, const std::string& recipePath);
     void Run(const pxr::UsdStageRefPtr& stage, const std::vector<pxr::SdfPath>& targets);
+    void DrawProgress();
+    void Finish();
+
+    // The export runs in the background: the window stays alive, shows how
+    // far it is and can stop it. Null when nothing runs.
+    struct Job;
+    std::shared_ptr<Job> _job;
 
     std::vector<pxr::SdfPath> _list;
 
@@ -67,6 +75,7 @@ private:
     bool _pathEdited = false;    // the artist typed or browsed: stop suggesting
 
     bool _resultOk = false;
+    bool _resultCancelled = false;  // stopped by the artist: said plainly, not as an error
     std::string _resultLine;
     std::string _report;
     bool _showReport = false;
