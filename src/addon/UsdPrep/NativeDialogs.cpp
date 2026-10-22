@@ -119,9 +119,10 @@ bool NativeOpenSceneDialog(std::string& outPath) {
     IFileOpenDialog* dialog = Create<IFileOpenDialog>(CLSID_FileOpenDialog);
     if (!dialog) return false;
     const COMDLG_FILTERSPEC filters[] = {
-        {L"Scenes and models (*.usd, *.usda, *.usdc, *.usdz, *.obj)", L"*.usd;*.usda;*.usdc;*.usdz;*.obj"},
+        {L"Scenes and models (*.usd, *.usda, *.usdc, *.usdz, *.abc, *.fbx, *.obj)",
+         L"*.usd;*.usda;*.usdc;*.usdz;*.abc;*.fbx;*.obj"},
         {L"USD (*.usd, *.usda, *.usdc, *.usdz)", L"*.usd;*.usda;*.usdc;*.usdz"},
-        {L"OBJ - converted to USD on opening (*.obj)", L"*.obj"},
+        {L"Alembic, FBX, OBJ - converted to USD on opening (*.abc, *.fbx, *.obj)", L"*.abc;*.fbx;*.obj"},
         {L"All files (*.*)", L"*.*"}};
     dialog->SetClientGuid(kSceneDialog);
     dialog->SetTitle(L"Open a scene");

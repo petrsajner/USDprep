@@ -2,7 +2,7 @@
 //
 // File > Open is the operating system's own dialog (network drives, DFS
 // links, a pasted path - everything the file browser of the editor
-// cannot do). A file USD cannot read (.obj) is converted to a temporary
+// cannot do). A file USD cannot read (.abc, .fbx, .obj) is converted to a temporary
 // USD file in the background, with a progress bar, and that is opened -
 // from then on it is a scene like any other. When a file cannot be
 // opened, a window says so instead of nothing happening.

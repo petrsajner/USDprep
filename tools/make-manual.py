@@ -146,8 +146,8 @@ story += [p("1  Quick start", H1),
 story += steps([
     "<b>Open the scene</b> with <i>File &gt; Open</i> - the usual Windows dialog, so network drives, DFS "
     "shares and a pasted path all work. A USD scene (<font face='Courier'>.usd, .usda, .usdc, .usdz</font>) "
-    "or an <font face='Courier'>.obj</font>, which is converted on the way in (see <i>Scans and OBJ files</i> "
-    "below). Dropping the file on the window works too. The file is never modified - USDprep only reads it.",
+    "or an Alembic, FBX or OBJ file (<font face='Courier'>.abc, .fbx, .obj</font>), which is converted on "
+    "the way in (see <i>Alembic, FBX and OBJ files</i> below). Dropping the file on the window works too. The file is never modified - USDprep only reads it.",
     "<b>Pick the object.</b> Click it in the 3D view, or click its name in the list on the right. "
     "It turns yellow in both places. One click takes the whole object with everything inside it.",
     "<b>Check the name and place</b> in <i>Save as</i>. USDprep suggests the object's name, in the folder you "
@@ -161,17 +161,32 @@ story += picture("app_start.png", WIDTH, "USDprep after opening a scene: the 3D 
                                          "<i>Prep for Nuke</i> panel on the right. Nothing is selected yet.")
 story += [p("That is the whole workflow. The rest of this manual explains the choices you can make on the way, "
             "what USDprep changes in the file and why, and what to do with an older Nuke."),
-          p("Scans and OBJ files", H2),
-          p("An <font face='Courier'>.obj</font> - a lidar or photogrammetry scan, a model from another "
-            "application - is converted to a temporary USD file when you open it; a progress window shows how far "
-            "it got. From then on it is a scene like any other: pick objects, reduce them, export them. The "
-            "original file is only read, never changed."),
-          p("Every object or group of the OBJ becomes an object in the list, with its polygons as they are, its "
+          p("Alembic, FBX and OBJ files", H2),
+          p("An Alembic file (<font face='Courier'>.abc</font>) - a camera track, a point cache, an animated "
+            "character -, an <font face='Courier'>.fbx</font> - a model or a character from Maya, 3ds Max, "
+            "Blender, Unreal or an online store - and an <font face='Courier'>.obj</font> - a lidar or "
+            "photogrammetry scan - are converted to a temporary USD file when you open them; a progress window "
+            "shows how far it got. From then on it is a scene like any other: pick objects, reduce them, export "
+            "them. The original file is only read, never changed. The panel header says <i>converted</i>; hover "
+            "over it for what the conversion found and what it had to leave out."),
+          p("<b>Alembic.</b> Every mesh comes with its animation sample by sample: points that deform, objects "
+            "that move, cameras with their focal length and film back (in millimetres, a lens squeeze included). "
+            "UVs, normals, vertex colours and face sets come along, subdivision surfaces keep their creases, and "
+            "the frames stay the ones the file has. Alembic carries no materials, so the objects come in their "
+            "vertex colour or grey. Points and curves come along too, but Nuke's USD reader draws neither. "
+            "Files written by any application since 2013 (Ogawa) are read; an older HDF5 file is named as such."),
+          p("<b>FBX.</b> Meshes with their UVs, normals, vertex colours and materials with their textures - also "
+            "the textures packed inside the <font face='Courier'>.fbx</font> - cameras, lights, and the animation "
+            "of the first take on the frames the file has (a shot that starts at 1001 stays at 1001). A character "
+            "moved by a skeleton or by blend shapes is baked into a point cache, frame by frame: in Nuke it simply "
+            "plays, there is no rig to set up. A texture path written on another computer is looked for next to "
+            "the <font face='Courier'>.fbx</font>, in its <font face='Courier'>.fbm</font> folder and in the "
+            "folders around it; a texture that cannot be found is named. An FBX camera keeps its exact field of view; the film back is not in what the file gives, so "
+            "a 36 mm wide one is assumed and the focal length set to match."),
+          p("<b>OBJ.</b> Every object or group of the OBJ becomes an object in the list, with its polygons as they are, its "
             "UVs, normals and vertex colours, and the materials of its <font face='Courier'>.mtl</font> file with "
             "their textures (colour, opacity, roughness, metallic, emission and normal maps). A texture path "
-            "written on another computer is looked for next to the <font face='Courier'>.mtl</font>. The panel "
-            "header says <i>converted</i>; hover over it for what the conversion found and what it had to leave "
-            "out (lines and points, for example)."),
+            "written on another computer is looked for next to the <font face='Courier'>.mtl</font>."),
           p("A scan at survey coordinates - millions of units from the origin - keeps its exact place in the "
             "exported file. The 3D view, which cannot draw that far out precisely, shows it at the origin instead "
             "and says <i>shown at the origin</i>."),
@@ -387,6 +402,10 @@ story += [table([
                           "selection - press the up arrow to select the bigger object."],
     ["The report says textures were left out", "Those texture files are not on this computer; the scene "
                                                "points at a place you cannot reach. Ask for the textures."],
+    ["An FBX or OBJ object is grey or plain after opening", "Hover over <i>converted</i> in the panel header: "
+                                                            "it names the textures that were not found. Put them "
+                                                            "next to the file, or in a <i>textures</i> folder "
+                                                            "beside it, and open the file again."],
     ["Alembic in Nuke does not move, or moves at the wrong speed", "Set the Nuke project's frame rate to the "
                                                                    "one named in the report, and look at the "
                                                                    "scene's frame numbers."],
@@ -416,7 +435,9 @@ story += [p("usdcut extract scene.usd /World/Set/Car -o car.usdc --preset nuke<b
             "usdcut extract scene.usd /World/Set/Car -o car.obj --preset nuke --frame 1010<br/>"
             "usdcut select  scene.usd --name \"*door*\" --topmost<br/>"
             "usdcut extract scan.obj /scan -o scan_small.usdc --preset nuke --simplify 0.01<br/>"
-            "usdcut inspect scene.usd<br/>"
+            "usdcut extract character.fbx /character -o character.usdc --preset nuke<br/>"
+            "usdcut inspect scene.usd &nbsp;&nbsp;&nbsp;&nbsp;(also an .abc, .fbx or .obj: what the conversion makes "
+            "of it)<br/>"
             "usdcut presets nuke &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(prints the preset as JSON - the start of "
             "your own recipe)<br/>"
             "usdcut help", CODE)]

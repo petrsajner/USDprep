@@ -17,6 +17,8 @@
 
 #include <usdprep/Import.h>
 
+#include "ImportShared.h"
+
 #include <algorithm>
 #include <charconv>
 #include <climits>
@@ -55,115 +57,9 @@
 PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace usdprep {
-
-namespace fs = std::filesystem;
+namespace importer {
 
 namespace {
-
-// ============================================================== small tools
-
-fs::path PathOf(const std::string& utf8) { return fs::u8path(utf8); }
-std::string Utf8Of(const fs::path& path) { return path.u8string(); }
-
-std::string Lower(std::string text) {
-    for (char& c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return text;
-}
-
-bool EndsWithNoCase(const std::string& text, const char* suffix) {
-    const size_t n = std::strlen(suffix);
-    return text.size() >= n && Lower(text.substr(text.size() - n)) == suffix;
-}
-
-FILE* OpenForReading(const std::string& utf8) {
-#ifdef _WIN32
-    return _wfopen(PathOf(utf8).c_str(), L"rb");
-#else
-    return std::fopen(utf8.c_str(), "rb");
-#endif
-}
-
-bool ReadWholeFile(const std::string& utf8, std::string* out) {
-    FILE* file = OpenForReading(utf8);
-    if (!file) return false;
-    char buffer[1 << 16];
-    size_t n = 0;
-    out->clear();
-    while ((n = std::fread(buffer, 1, sizeof(buffer), file)) > 0) out->append(buffer, n);
-    std::fclose(file);
-    return true;
-}
-
-bool IsFile(const fs::path& path) {
-    std::error_code ec;
-    return fs::is_regular_file(path, ec);
-}
-
-// 1234567 -> "1,234,567": the report is read by people.
-std::string Count(size_t n) {
-    std::string digits = std::to_string(n);
-    for (int i = static_cast<int>(digits.size()) - 3; i > 0; i -= 3) digits.insert(static_cast<size_t>(i), ",");
-    return digits;
-}
-
-std::string Number(double value) {
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), "%.3f", value);
-    std::string text = buffer;
-    while (!text.empty() && text.back() == '0') text.pop_back();
-    if (!text.empty() && text.back() == '.') text.pop_back();
-    return text;
-}
-
-// Prim names: letters, digits and underscores. Accented Latin letters
-// lose their accents ("Předávka" -> "Predavka") rather than turning into
-// underscores; anything else becomes an underscore.
-const char kLatin1[] = "AAAAAAACEEEEIIIIDNOOOOO_OUUUUYTsaaaaaaaceeeeiiiidnooooo_ouuuuyty";  // U+00C0..U+00FF
-const char kLatinExtA[] =                                                                   // U+0100..U+017F
-    "AaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIiIiJjKkkLlLlLlL"
-    "lLlNnNnNnnNnOoOoOoOoRrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
-static_assert(sizeof(kLatin1) == 0x40 + 1, "one letter per code point U+00C0..U+00FF");
-static_assert(sizeof(kLatinExtA) == 0x80 + 1, "one letter per code point U+0100..U+017F");
-
-std::string PrimNameFor(const std::string& utf8, const std::string& fallback) {
-    std::string name;
-    for (size_t i = 0; i < utf8.size();) {
-        const unsigned char c = static_cast<unsigned char>(utf8[i]);
-        if (c < 0x80) {
-            name += (std::isalnum(c) || c == '_') ? static_cast<char>(c) : '_';
-            ++i;
-            continue;
-        }
-        // one UTF-8 sequence
-        size_t length = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0xC0) ? 2 : 1;
-        unsigned int code = 0;
-        if (length == 2 && i + 1 < utf8.size()) code = ((c & 0x1Fu) << 6) | (static_cast<unsigned char>(utf8[i + 1]) & 0x3Fu);
-        if (code >= 0xC0 && code < 0x100) {
-            name += kLatin1[code - 0xC0];
-        } else if (code >= 0x100 && code < 0x180) {
-            name += kLatinExtA[code - 0x100];
-        } else {
-            name += '_';
-        }
-        i += length;
-    }
-    // no leading, trailing or doubled underscores left over from spaces and dots
-    std::string tidy;
-    for (const char c : name) {
-        if (c == '_' && (tidy.empty() || tidy.back() == '_')) continue;
-        tidy += c;
-    }
-    while (!tidy.empty() && tidy.back() == '_') tidy.pop_back();
-    if (tidy.empty()) tidy = fallback;
-    if (std::isdigit(static_cast<unsigned char>(tidy[0]))) tidy = "_" + tidy;
-    return tidy;
-}
-
-std::string UniqueName(const std::string& wanted, std::unordered_map<std::string, int>* taken) {
-    std::string name = wanted;
-    for (int n = 2; (*taken)[name]++ > 0; ++n) name = wanted + "_" + std::to_string(n);
-    return name;
-}
 
 // ================================================================ reading
 
@@ -658,80 +554,70 @@ std::string ResolveTexture(const std::string& written, const fs::path& mtlDir, s
     return path.lexically_normal().generic_u8string();
 }
 
+// An .mtl material in the terms of the shared preview material: the
+// texture paths found, the OBJ conventions (Ns, d / Tr, -imfchan, a bump
+// map that is really a normal map) read the way applications read them.
 class MaterialWriter {
   public:
-    MaterialWriter(const UsdStageRefPtr& stage, const fs::path& mtlDir) : _stage(stage), _mtlDir(mtlDir) {}
+    MaterialWriter(const UsdStageRefPtr& stage, const fs::path& mtlDir) : _writer(stage), _mtlDir(mtlDir) {}
 
     UsdShadeMaterial Write(const SdfPath& path, const Mtl& mtl, Report& rep) {
-        _path = path;
-        _reader = UsdShadeOutput();
-        UsdShadeMaterial material = UsdShadeMaterial::Define(_stage, path);
-        _surface = UsdShadeShader::Define(_stage, path.AppendChild(TfToken("PreviewSurface")));
-        _surface.CreateIdAttr(VtValue(TfToken("UsdPreviewSurface")));
-        material.CreateSurfaceOutput().ConnectToSource(_surface.CreateOutput(TfToken("surface"), SdfValueTypeNames->Token));
-
+        PreviewMaterial m;
         // colour: the texture wins over Kd, as in the applications that write both
-        UsdShadeShader diffuse;
         if (mtl.mapKd.Set()) {
-            diffuse = Texture("diffuseTexture", mtl.mapKd, false);
-            Connect("diffuseColor", SdfValueTypeNames->Color3f, diffuse, "rgb", SdfValueTypeNames->Float3);
+            m.diffuseMap = Map(mtl.mapKd);
         } else if (mtl.hasKd) {
-            _surface.CreateInput(TfToken("diffuseColor"), SdfValueTypeNames->Color3f).Set(mtl.kd);
+            m.hasDiffuse = true;
+            m.diffuse = mtl.kd;
         }
-
         if (mtl.mapD.Set()) {
-            // the diffuse texture's own alpha, or a separate mask
-            const bool sameAsColor = diffuse && mtl.mapD.file == mtl.mapKd.file;
-            const std::string channel = !mtl.mapD.channel.empty() ? Channel(mtl.mapD.channel) : sameAsColor ? "a" : "r";
-            Connect("opacity", SdfValueTypeNames->Float, sameAsColor ? diffuse : Texture("opacityTexture", mtl.mapD, true),
-                    channel, SdfValueTypeNames->Float);
+            m.opacityMap = Map(mtl.mapD);  // the colour texture's alpha when it is the same file
+            if (!mtl.mapD.channel.empty()) m.opacityMap.channel = Channel(mtl.mapD.channel);
         } else if (mtl.hasD && mtl.d < 1.0f) {
             if (mtl.d <= 0.0f) {
                 rep.Warn("import", "material " + mtl.name +
                                        " says it is fully transparent (d 0 / Tr 1) - read as opaque: that is an "
                                        "exporter's mistake far more often than an invisible object");
             } else {
-                _surface.CreateInput(TfToken("opacity"), SdfValueTypeNames->Float).Set(mtl.d);
+                m.hasOpacity = true;
+                m.opacity = mtl.d;
             }
         }
-
         if (mtl.mapPr.Set()) {
-            Connect("roughness", SdfValueTypeNames->Float, Texture("roughnessTexture", mtl.mapPr, true),
-                    Channel(mtl.mapPr.channel), SdfValueTypeNames->Float);
+            m.roughnessMap = Map(mtl.mapPr);
+            m.roughnessMap.channel = Channel(mtl.mapPr.channel);
         } else if (mtl.hasPr) {
-            _surface.CreateInput(TfToken("roughness"), SdfValueTypeNames->Float).Set(std::clamp(mtl.pr, 0.0f, 1.0f));
+            m.hasRoughness = true;
+            m.roughness = std::clamp(mtl.pr, 0.0f, 1.0f);
         } else if (mtl.hasNs) {
             // the specular exponent (0-1000) as roughness, the way Blender converts it
-            const float roughness = 1.0f - std::sqrt(std::clamp(mtl.ns, 0.0f, 1000.0f) / 1000.0f);
-            _surface.CreateInput(TfToken("roughness"), SdfValueTypeNames->Float).Set(roughness);
+            m.hasRoughness = true;
+            m.roughness = 1.0f - std::sqrt(std::clamp(mtl.ns, 0.0f, 1000.0f) / 1000.0f);
         }
-
         if (mtl.mapPm.Set()) {
-            Connect("metallic", SdfValueTypeNames->Float, Texture("metallicTexture", mtl.mapPm, true),
-                    Channel(mtl.mapPm.channel), SdfValueTypeNames->Float);
+            m.metallicMap = Map(mtl.mapPm);
+            m.metallicMap.channel = Channel(mtl.mapPm.channel);
         } else if (mtl.hasPm) {
-            _surface.CreateInput(TfToken("metallic"), SdfValueTypeNames->Float).Set(std::clamp(mtl.pm, 0.0f, 1.0f));
+            m.hasMetallic = true;
+            m.metallic = std::clamp(mtl.pm, 0.0f, 1.0f);
         }
-
         if (mtl.mapKe.Set()) {
-            Connect("emissiveColor", SdfValueTypeNames->Color3f, Texture("emissiveTexture", mtl.mapKe, false), "rgb",
-                    SdfValueTypeNames->Float3);
-        } else if (mtl.hasKe && (mtl.ke[0] > 0.0f || mtl.ke[1] > 0.0f || mtl.ke[2] > 0.0f)) {
-            _surface.CreateInput(TfToken("emissiveColor"), SdfValueTypeNames->Color3f).Set(mtl.ke);
+            m.emissiveMap = Map(mtl.mapKe);
+        } else if (mtl.hasKe) {
+            m.hasEmissive = true;
+            m.emissive = mtl.ke;
         }
-
         const MtlMap* normal = mtl.mapNormal.Set() ? &mtl.mapNormal
                                : (mtl.mapBump.Set() && LooksLikeNormalMap(mtl.mapBump)) ? &mtl.mapBump
                                                                                          : nullptr;
         if (normal) {
-            UsdShadeShader texture = Texture("normalTexture", *normal, true);
-            texture.CreateInput(TfToken("scale"), SdfValueTypeNames->Float4).Set(GfVec4f(2.0f, 2.0f, 2.0f, 1.0f));
-            texture.CreateInput(TfToken("bias"), SdfValueTypeNames->Float4).Set(GfVec4f(-1.0f, -1.0f, -1.0f, 0.0f));
-            Connect("normal", SdfValueTypeNames->Normal3f, texture, "rgb", SdfValueTypeNames->Float3);
+            m.normalMap = Map(*normal);
         } else if (mtl.mapBump.Set()) {
             rep.Warn("import", "material " + mtl.name + ": bump map " + Utf8Of(PathOf(mtl.mapBump.file).filename()) +
                                    " left out - a height map, and the preview material has no input for one");
         }
+        UsdShadeMaterial material = _writer.Write(path, m);
+        textures = _writer.textures;
         return material;
     }
 
@@ -747,50 +633,16 @@ class MaterialWriter {
         return "r";  // r, l (luminance), z, or nothing said
     }
 
-    UsdShadeOutput StReader() {
-        if (!_reader) {
-            UsdShadeShader reader = UsdShadeShader::Define(_stage, _path.AppendChild(TfToken("stReader")));
-            reader.CreateIdAttr(VtValue(TfToken("UsdPrimvarReader_float2")));
-            reader.CreateInput(TfToken("varname"), SdfValueTypeNames->Token).Set(TfToken("st"));
-            _reader = reader.CreateOutput(TfToken("result"), SdfValueTypeNames->Float2);
-        }
-        return _reader;
+    MapRef Map(const MtlMap& map) {
+        MapRef ref;
+        ref.file = ResolveTexture(map.file, _mtlDir, &foundElsewhere, &missing);
+        ref.scale = map.scale;
+        ref.offset = map.offset;
+        return ref;
     }
 
-    UsdShadeShader Texture(const std::string& nodeName, const MtlMap& map, bool data) {
-        UsdShadeShader texture = UsdShadeShader::Define(_stage, _path.AppendChild(TfToken(nodeName)));
-        texture.CreateIdAttr(VtValue(TfToken("UsdUVTexture")));
-        texture.CreateInput(TfToken("file"), SdfValueTypeNames->Asset)
-            .Set(SdfAssetPath(ResolveTexture(map.file, _mtlDir, &foundElsewhere, &missing)));
-        UsdShadeOutput st = StReader();
-        if (map.scale != GfVec2f(1.0f, 1.0f) || map.offset != GfVec2f(0.0f, 0.0f)) {
-            UsdShadeShader transform =
-                UsdShadeShader::Define(_stage, _path.AppendChild(TfToken(nodeName + "_transform")));
-            transform.CreateIdAttr(VtValue(TfToken("UsdTransform2d")));
-            transform.CreateInput(TfToken("in"), SdfValueTypeNames->Float2).ConnectToSource(st);
-            transform.CreateInput(TfToken("scale"), SdfValueTypeNames->Float2).Set(map.scale);
-            transform.CreateInput(TfToken("translation"), SdfValueTypeNames->Float2).Set(map.offset);
-            st = transform.CreateOutput(TfToken("result"), SdfValueTypeNames->Float2);
-        }
-        texture.CreateInput(TfToken("st"), SdfValueTypeNames->Float2).ConnectToSource(st);
-        texture.CreateInput(TfToken("wrapS"), SdfValueTypeNames->Token).Set(TfToken("repeat"));
-        texture.CreateInput(TfToken("wrapT"), SdfValueTypeNames->Token).Set(TfToken("repeat"));
-        if (data) texture.CreateInput(TfToken("sourceColorSpace"), SdfValueTypeNames->Token).Set(TfToken("raw"));
-        ++textures;
-        return texture;
-    }
-
-    void Connect(const char* input, const SdfValueTypeName& inputType, UsdShadeShader source,
-                 const std::string& output, const SdfValueTypeName& outputType) {
-        _surface.CreateInput(TfToken(input), inputType)
-            .ConnectToSource(source.CreateOutput(TfToken(output), outputType));
-    }
-
-    UsdStageRefPtr _stage;
+    PreviewMaterialWriter _writer;
     fs::path _mtlDir;
-    SdfPath _path;
-    UsdShadeShader _surface;
-    UsdShadeOutput _reader;
 };
 
 // ================================================================ meshes
@@ -915,16 +767,10 @@ MeshCounts WriteMesh(const ObjData& data, const Part& part, UsdGeomMesh mesh, co
 
 // ============================================================== the import
 
-bool IsImportable(const std::string& path) { return EndsWithNoCase(path, ".obj"); }
-
-Report ImportToUsd(const std::string& inputPath, const std::string& usdPath, ImportProgress* progress) {
+Report ImportObj(const std::string& inputPath, const std::string& usdPath, Progress* progress) {
     Report rep;
     rep.inputPath = inputPath;
     rep.outputPath = usdPath;
-    if (!IsImportable(inputPath)) {
-        rep.Fail("USDprep imports .obj files; this is not one: " + inputPath);
-        return rep;
-    }
     const fs::path source = PathOf(inputPath);
     std::error_code ec;
     const fs::path sourceAbsolute = fs::absolute(source, ec);
@@ -1142,4 +988,5 @@ Report ImportToUsd(const std::string& inputPath, const std::string& usdPath, Imp
     return rep;
 }
 
+}  // namespace importer
 }  // namespace usdprep

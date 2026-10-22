@@ -14,9 +14,12 @@ textures and animation. Every conversion is based on what Nuke 16.1 and
 17.0 were *measured* to read ([NUKE_COMPAT.md](NUKE_COMPAT.md)), and each
 one is named in the export report.
 
-Scans and models come in as `.obj` too: converted to USD on opening, then
-picked and reduced like any scene - down to a hundredth of the polygons
-for a light stand-in of a lidar or photogrammetry scan.
+Camera tracks, point caches, animated characters, models and scans come
+in as Alembic (`.abc`), `.fbx` and `.obj` too: converted to USD on
+opening, then picked and reduced like any scene - down to a hundredth of
+the polygons for a light stand-in of a lidar or photogrammetry scan. A
+skinned FBX character arrives in Nuke as a point cache, on the frames the
+file has.
 
 - **Download:** the installer is on the [Releases](https://github.com/petrsajner/USDprep/releases) page
   (Windows, per-user, no admin rights, nothing else to install).
@@ -65,6 +68,15 @@ cmake -S . -B build -G "Visual Studio 16 2019" -A x64 \
 cmake --build build --config RelWithDebInfo --parallel
 ```
 
+The importers need two more libraries, both optional at build time (the
+rest builds without them, and opening such a file says what is missing):
+`.fbx` reads through **assimp** from the same env
+(`pixi add "assimp>=6.0.5,<7"` in `third_party/usdtools`; zlib comes with
+it), `.abc` through the static **Alembic** build in
+`third_party/alembic-install` (see `M4_LOG.md`). The installer carries
+`assimp.dll` and `zlib.dll` with their licences, Alembic is linked in -
+nothing is fetched at run time.
+
 Run tests (USD DLLs must be on PATH — from the same env):
 
 ```bash
@@ -77,6 +89,8 @@ ctest --test-dir build -C RelWithDebInfo --output-on-failure
 ```
 usdcut extract scene.usd /World/Set/Car -o car.usdc --preset nuke --report car.json
 usdcut extract scan.obj /scan -o scan_small.usdc --preset nuke --simplify 0.01
+usdcut extract character.fbx /character -o character.usdc --preset nuke
+usdcut inspect camera_track.abc
 usdcut prune scene.usd --except /World/Set/Car,/World/Cameras/shotCam -o shot_min.usdc
 usdcut prune scene.usd --drop /World/Lights -o no_lights.usdc
 usdcut prune scene.usd --drop-type light --drop-purpose guide,proxy -o clean.usdc

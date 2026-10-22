@@ -1,0 +1,273 @@
+; FBX 7.4.0 project file
+; USDprep test scene, written by hand: frames 1001-1003 at 24 fps.
+;   Box    - a quad moving along X, 0 -> 2
+;   Bar    - two quads along X skinned to Bone1 (at 0) and Bone2 (at 1);
+;            Bone2 turns 90 degrees about Z, so the far end (2,0,0) ends at (1,1,0)
+;   Cam    - a camera at (0,0,10) turned to look down -Z, 54.43 degrees wide, 16:9
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+	Creator: "USDprep test"
+}
+GlobalSettings:  {
+	Version: 1000
+	Properties70:  {
+		P: "UpAxis", "int", "Integer", "",1
+		P: "UpAxisSign", "int", "Integer", "",1
+		P: "FrontAxis", "int", "Integer", "",2
+		P: "FrontAxisSign", "int", "Integer", "",1
+		P: "CoordAxis", "int", "Integer", "",0
+		P: "CoordAxisSign", "int", "Integer", "",1
+		P: "OriginalUpAxis", "int", "Integer", "",1
+		P: "OriginalUpAxisSign", "int", "Integer", "",1
+		P: "UnitScaleFactor", "double", "Number", "",1
+		P: "OriginalUnitScaleFactor", "double", "Number", "",1
+		P: "TimeMode", "enum", "", "",11
+		P: "TimeSpanStart", "KTime", "Time", "",1926347673250
+		P: "TimeSpanStop", "KTime", "Time", "",1930196519750
+		P: "CustomFrameRate", "double", "Number", "",24
+	}
+}
+Objects:  {
+	Geometry: 1001, "Geometry::Box", "Mesh" {
+		Vertices: *12 {
+			a: 0,0,0,1,0,0,1,1,0,0,1,0
+		}
+		PolygonVertexIndex: *4 {
+			a: 0,1,2,-4
+		}
+		GeometryVersion: 124
+		LayerElementUV: 0 {
+			Version: 101
+			Name: "map1"
+			MappingInformationType: "ByPolygonVertex"
+			ReferenceInformationType: "IndexToDirect"
+			UV: *8 {
+				a: 0,0,1,0,1,1,0,1
+			}
+			UVIndex: *4 {
+				a: 0,1,2,3
+			}
+		}
+		LayerElementMaterial: 0 {
+			Version: 101
+			Name: ""
+			MappingInformationType: "AllSame"
+			ReferenceInformationType: "IndexToDirect"
+			Materials: *1 {
+				a: 0
+			}
+		}
+		Layer: 0 {
+			Version: 100
+			LayerElement:  {
+				Type: "LayerElementUV"
+				TypedIndex: 0
+			}
+			LayerElement:  {
+				Type: "LayerElementMaterial"
+				TypedIndex: 0
+			}
+		}
+	}
+	Geometry: 1002, "Geometry::Bar", "Mesh" {
+		Vertices: *18 {
+			a: 0,0,0,1,0,0,2,0,0,0,0.2,0,1,0.2,0,2,0.2,0
+		}
+		PolygonVertexIndex: *8 {
+			a: 0,1,4,-4,1,2,5,-5
+		}
+		GeometryVersion: 124
+		Layer: 0 {
+			Version: 100
+		}
+	}
+	Model: 2001, "Model::Box", "Mesh" {
+		Version: 232
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,0,0
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+	Model: 2002, "Model::Bar", "Mesh" {
+		Version: 232
+		Properties70:  {
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+	Model: 2003, "Model::Bone1", "LimbNode" {
+		Version: 232
+		Properties70:  {
+		}
+	}
+	Model: 2004, "Model::Bone2", "LimbNode" {
+		Version: 232
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",1,0,0
+		}
+	}
+	Model: 2005, "Model::Cam", "Camera" {
+		Version: 232
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,0,10
+			P: "Lcl Rotation", "Lcl Rotation", "", "A",0,90,0
+		}
+	}
+	NodeAttribute: 3003, "NodeAttribute::Bone1", "LimbNode" {
+		TypeFlags: "Skeleton"
+	}
+	NodeAttribute: 3004, "NodeAttribute::Bone2", "LimbNode" {
+		TypeFlags: "Skeleton"
+	}
+	NodeAttribute: 3005, "NodeAttribute::Cam", "Camera" {
+		Properties70:  {
+			P: "FieldOfView", "FieldOfView", "", "A",54.4322
+			P: "AspectWidth", "double", "Number", "",1920
+			P: "AspectHeight", "double", "Number", "",1080
+			P: "NearPlane", "double", "Number", "",1
+			P: "FarPlane", "double", "Number", "",10000
+		}
+		TypeFlags: "Camera"
+		GeometryVersion: 124
+		Position: 0,0,10
+		Up: 0,1,0
+		LookAt: 0,0,0
+		ShowInfoOnMoving: 1
+		ShowAudio: 0
+		AudioColor: 0,1,0
+		CameraOrthoZoom: 1
+	}
+	Material: 4001, "Material::Red", "" {
+		Version: 102
+		ShadingModel: "lambert"
+		MultiLayer: 0
+		Properties70:  {
+			P: "DiffuseColor", "Color", "", "A",1,0,0
+		}
+	}
+	Deformer: 5001, "Deformer::Skin", "Skin" {
+		Version: 101
+		Link_DeformAcuracy: 50
+	}
+	Deformer: 5002, "SubDeformer::Bone1", "Cluster" {
+		Version: 100
+		UserData: "", ""
+		Indexes: *4 {
+			a: 0,3,1,4
+		}
+		Weights: *4 {
+			a: 1,1,0.5,0.5
+		}
+		Transform: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
+		}
+		TransformLink: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
+		}
+	}
+	Deformer: 5003, "SubDeformer::Bone2", "Cluster" {
+		Version: 100
+		UserData: "", ""
+		Indexes: *4 {
+			a: 1,4,2,5
+		}
+		Weights: *4 {
+			a: 0.5,0.5,1,1
+		}
+		Transform: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
+		}
+		TransformLink: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,1,0,0,1
+		}
+	}
+	AnimationStack: 6001, "AnimStack::Take 001", "" {
+		Properties70:  {
+			P: "LocalStart", "KTime", "Time", "",1926347673250
+			P: "LocalStop", "KTime", "Time", "",1930196519750
+			P: "ReferenceStart", "KTime", "Time", "",1926347673250
+			P: "ReferenceStop", "KTime", "Time", "",1930196519750
+		}
+	}
+	AnimationLayer: 6002, "AnimLayer::BaseLayer", "" {
+	}
+	AnimationCurveNode: 6003, "AnimCurveNode::T", "" {
+		Properties70:  {
+			P: "d|X", "Number", "", "A",0
+			P: "d|Y", "Number", "", "A",0
+			P: "d|Z", "Number", "", "A",0
+		}
+	}
+	AnimationCurve: 6004, "AnimCurve::", "" {
+		Default: 0
+		KeyVer: 4008
+		KeyTime: *3 {
+			a: 1926347673250,1928272096500,1930196519750
+		}
+		KeyValueFloat: *3 {
+			a: 0,1,2
+		}
+		KeyAttrFlags: *1 {
+			a: 260
+		}
+		KeyAttrDataFloat: *4 {
+			a: 0,0,0,0
+		}
+		KeyAttrRefCount: *1 {
+			a: 3
+		}
+	}
+	AnimationCurveNode: 6005, "AnimCurveNode::R", "" {
+		Properties70:  {
+			P: "d|X", "Number", "", "A",0
+			P: "d|Y", "Number", "", "A",0
+			P: "d|Z", "Number", "", "A",0
+		}
+	}
+	AnimationCurve: 6006, "AnimCurve::", "" {
+		Default: 0
+		KeyVer: 4008
+		KeyTime: *3 {
+			a: 1926347673250,1928272096500,1930196519750
+		}
+		KeyValueFloat: *3 {
+			a: 0,45,90
+		}
+		KeyAttrFlags: *1 {
+			a: 260
+		}
+		KeyAttrDataFloat: *4 {
+			a: 0,0,0,0
+		}
+		KeyAttrRefCount: *1 {
+			a: 3
+		}
+	}
+}
+Connections:  {
+	C: "OO",2001,0
+	C: "OO",2002,0
+	C: "OO",2003,0
+	C: "OO",2005,0
+	C: "OO",2004,2003
+	C: "OO",1001,2001
+	C: "OO",1002,2002
+	C: "OO",4001,2001
+	C: "OO",3003,2003
+	C: "OO",3004,2004
+	C: "OO",3005,2005
+	C: "OO",5001,1002
+	C: "OO",5002,5001
+	C: "OO",5003,5001
+	C: "OO",2003,5002
+	C: "OO",2004,5003
+	C: "OO",6002,6001
+	C: "OO",6003,6002
+	C: "OO",6005,6002
+	C: "OP",6003,2001, "Lcl Translation"
+	C: "OP",6004,6003, "d|X"
+	C: "OP",6005,2004, "Lcl Rotation"
+	C: "OP",6006,6005, "d|Z"
+}

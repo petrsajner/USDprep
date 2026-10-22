@@ -17,6 +17,11 @@ add_library(usdprep-core
     src/AbcWriter.cpp
     src/StageInfo.cpp
     src/ObjImport.cpp
+    src/Import.cpp
+    src/ImportShared.cpp
+    src/AbcImport.cpp
+    src/FbxImport.cpp
+    src/FbxScan.cpp
 )
 add_library(usdprep::core ALIAS usdprep-core)
 
@@ -43,4 +48,21 @@ if(Alembic_FOUND)
     target_compile_definitions(usdprep-core PRIVATE USDPREP_WITH_ALEMBIC)
 else()
     message(STATUS "usdprep: Alembic not found - .abc export disabled")
+endif()
+
+# assimp (.fbx import) comes from the USD environment (conda-forge). Without
+# it the core builds and an .fbx fails to convert with a clear message.
+find_package(assimp CONFIG QUIET)
+if(assimp_FOUND)
+    message(STATUS "usdprep: assimp ${assimp_VERSION} found - .fbx import enabled")
+    target_link_libraries(usdprep-core PRIVATE assimp::assimp)
+    # binary FBX packs its arrays with zlib (FbxScan.cpp reads the animation start)
+    if(NOT ZLIB_ROOT)
+        get_filename_component(ZLIB_ROOT "${assimp_DIR}/../../.." ABSOLUTE)  # the same environment
+    endif()
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(usdprep-core PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(usdprep-core PRIVATE USDPREP_WITH_ASSIMP)
+else()
+    message(STATUS "usdprep: assimp not found - .fbx import disabled")
 endif()

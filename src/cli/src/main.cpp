@@ -1,6 +1,6 @@
 // usdcut — CLI face of usdprep-core.
 //
-//   usdcut extract <scene.usd(a|c|z)|model.obj> <prim-path>... -o out.usdc|usda
+//   usdcut extract <scene.usd(a|c|z)|.abc|.fbx|.obj> <prim-path>... -o out.usdc|usda
 //   usdcut prune   <scene> --except /A,/B -o out.usdc   (keep only)
 //   usdcut prune   <scene> --drop /A,/B -o out.usdc     (delete selection)
 //   usdcut prune   <scene> --drop-type light -o out.usdc
@@ -53,8 +53,8 @@ void PrintUsage() {
         << "by Petr Sajner, Apache License 2.0\n\n"
         << "usage:\n"
         << "  usdcut extract <scene> <prim-path>... -o <out.usdc|usda|obj|abc> [options]\n"
-        << "                         <scene> is a USD file, or an .obj (converted to a\n"
-        << "                         temporary USD first; see 'usdcut inspect' for its paths)\n"
+        << "                         <scene> is a USD file, or an .abc, .fbx or .obj (converted\n"
+        << "                         to a temporary USD first; see 'usdcut inspect' for its paths)\n"
         << "  usdcut prune   <scene> (--except <paths> | --drop <paths> |\n"
         << "                          --drop-type <types> | --drop-purpose <purposes>)\n"
         << "                         -o <out> [options]\n"
@@ -108,7 +108,7 @@ void PrintUsage() {
         << "                         * and ? turn it into a wildcard match\n";
 }
 
-// A scene USD cannot read (.obj) becomes a temporary USD file first: the
+// A scene USD cannot read (.abc, .fbx, .obj) becomes a temporary USD file first: the
 // commands then work on it like on any scene. The temporary goes when the
 // command is done. Notes about the conversion go to stderr, so that the
 // paths 'select' prints stay alone on stdout.
@@ -136,7 +136,7 @@ class SceneInput {
                       << e.action << ": " << e.detail << "\n";
         }
         if (!rep.ok) {
-            std::cerr << "usdcut: cannot convert " << _path << ": " << rep.error << "\n";
+            std::cerr << "usdcut: " << rep.error << "\n";
             return false;
         }
         _path = usd;

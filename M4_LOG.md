@@ -340,3 +340,59 @@ ALab set to .usdc (296 s):
 
 The lookup of materials outside the selection now remembers what each
 ancestor binds (the selecting step is the masked open, not the lookup).
+
+## 0.9.2 - Alembic and FBX in, repeating textures out (2026-10-22)
+
+Petr: "read for abc and fbx - the same as we did obj", everything inside
+the installer, and the program runs where there is no internet.
+
+**Import architecture.** `Import.cpp` dispatches by extension to
+`ImportObj` / `ImportAbc` / `ImportFbx` (namespace `usdprep::importer`);
+what all three share - names, the preview material writer, the
+"imported from" marker, saving - moved from `ObjImport.cpp` into
+`ImportShared.cpp`. The app and usdcut needed no new code paths: the open
+dialog, drop, the temporary conversion and the "converted" header are
+generic. A conversion that did not find a texture is made again at the
+next opening, so textures put in place later are picked up.
+
+**Alembic** (`AbcImport.cpp`, the static Alembic 1.8.8 already linked for
+the .abc export; Ogawa only, HDF5 is named). Meshes and subdivision
+surfaces (creases, corners, holes) with every sample: points, topology
+when it changes, velocities, UVs and normals indexed or expanded, colour
+sets (also as `displayColor`), face sets as GeomSubsets. Alembic winds
+faces clockwise: faces and face-varying data are reversed together.
+Cameras: the film back from centimetres to millimetres, the lens squeeze
+in the horizontal aperture. A transform with one shape below it becomes
+one prim, as usdAbc does - face sets under the shape do not stop that.
+Points and curves come along (Nuke draws neither), NURBS and lights are
+named and left out. fps from the uniform time sampling.
+
+**FBX** (`FbxImport.cpp`, assimp 6.0.5 from conda-forge in the pixi env,
+`assimp.dll` + `zlib.dll` in the installer). What assimp does that had to
+be undone:
+
+- vertices per corner -> welded by position; meshes split by material ->
+  merged per node, the materials as subsets;
+- matrices column-vector -> transposed; `mHorizontalFOV` is half the
+  angle; camera look-at +X;
+- every key shifted to start at 0 -> `FbxScan.cpp` reads the stack's
+  LocalStart (or the earliest KeyTime) from the file itself, binary
+  (node records, zlib arrays) or ASCII, so a shot at 1001 stays at 1001;
+- `$AssimpFbx$` pivot helpers folded into their node;
+- a "DefaultMaterial" made up for geometry with none -> left unbound.
+
+Skinning and blend shapes are baked into point caches every frame (what
+Nuke needs). Textures packed in the .fbx are unpacked next to the
+conversion; paths from another computer are looked for next to the file,
+in `<name>.fbm`, a textures folder, and around. The film back is not in
+what assimp gives: 36 mm wide is assumed and the focal length set so the
+field of view is exact.
+
+The importers write the material colour under each texture, so that
+there is a colour to show where a texture is missing.
+
+Tests: `test_import_formats` (an Alembic scene written with the Alembic
+API - winding, collapse, squeeze, points, curves, creases; `rig.fbx` -
+frames 1001-1003, the skinned bar, the camera; broken files fail with a
+message). Alembic's fuzzer files all end in a readable "the file is
+damaged (...)". 18 tests pass.

@@ -152,8 +152,9 @@ void DrawPrepPanel() {
     const UsdStageRefPtr stage = usdtweak::GetCurrentStage();
     KeepContentBrowserHidden(stage);
     if (!stage) {
-        ImGui::TextWrapped("Open a scene with File > Open - USD, or an OBJ (a scan, a model), which is "
-                           "converted to USD on opening. You can also drop the file on this window. "
+        ImGui::TextWrapped("Open a scene with File > Open - USD, or an Alembic, FBX or OBJ file (a camera "
+                           "track, an animated character, a scan), which is converted to USD on opening. "
+                           "You can also drop the file on this window. "
                            "Then pick the objects you want to take out - here in the tree or by "
                            "clicking them in the 3D view.");
         return;
@@ -165,7 +166,7 @@ void DrawPrepPanel() {
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * kPanelFontScale);
 
     // ----- header --------------------------------------------------------
-    // the file the artist opened - for a converted OBJ, the OBJ
+    // the file the artist opened - for a converted .abc / .fbx / .obj, that file
     const bool imported = IsImported(stage);
     std::string sceneName = imported ? BasenameOf(SourcePathOf(stage))
                                      : stage->GetRootLayer() ? stage->GetRootLayer()->GetDisplayName() : "";
@@ -276,7 +277,7 @@ TF_REGISTRY_FUNCTION_WITH_TAG(UsdTweakAddonRegistry, UsdPrep) {
     addon.defaultOpen = true;
     addon.draw = &DrawPrepPanel;
     addon.onStartup = &StartTidy;
-    // opening files: the system's dialog, OBJ converted on the way in, a word when it fails
+    // opening files: the system's dialog, Alembic / FBX / OBJ converted on the way in, a word when it fails
     addon.onFrame = &OnFrame;
     addon.onOpenDialog = &OnOpenDialog;
     addon.onOpenStage = &OnOpenStage;

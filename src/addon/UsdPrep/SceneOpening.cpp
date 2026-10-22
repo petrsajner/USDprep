@@ -108,6 +108,19 @@ bool WriteText(const fs::path& path, const std::string& text) {
     return file.good();
 }
 
+// The conversion that has just finished: opened once whatever its notes say.
+fs::path& JustConverted() {
+    static fs::path dir;
+    return dir;
+}
+
+// A conversion that did not find everything (a texture, a material
+// library) is made again at every opening: what the artist has put in
+// place since is picked up.
+bool FoundEverything(const Conversion& conversion) {
+    return ReadText(conversion.notes()).find("not found") == std::string::npos;
+}
+
 // A finished conversion of exactly this source, if there is one.
 bool FindConversion(const std::string& source, const std::string& signature, Conversion* found) {
     constexpr int kPlaces = 8;
@@ -115,7 +128,9 @@ bool FindConversion(const std::string& source, const std::string& signature, Con
         const Conversion conversion = ConversionFor(source, signature, place);
         std::error_code ec;
         if (fs::is_regular_file(conversion.usd, ec) && fs::is_regular_file(conversion.notes(), ec) &&
-            ReadText(conversion.signature()) == signature) {
+            ReadText(conversion.signature()) == signature &&
+            (conversion.dir == JustConverted() || FoundEverything(conversion))) {
+            if (conversion.dir == JustConverted()) JustConverted().clear();
             *found = conversion;
             return true;
         }
@@ -380,6 +395,7 @@ void OnFrame() {
         std::error_code ec;
         if (report.ok && WriteText(conversion.notes(), NotesOf(report)) &&
             WriteText(conversion.signature(), signature)) {
+            JustConverted() = conversion.dir;
             Open(source);  // finds the conversion now
         } else {
             fs::remove_all(conversion.dir, ec);

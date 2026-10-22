@@ -12,7 +12,8 @@
 
 namespace usdprep {
 
-// True when `path` names a file USDprep imports (by its extension): .obj.
+// True when `path` names a file USDprep imports (by its extension): .abc
+// (Alembic, Ogawa), .fbx, .obj.
 bool IsImportable(const std::string& path);
 
 // A running import, shared with whoever shows it.

@@ -17,7 +17,7 @@ bool NativeSaveDialog(const std::string& suggestedName, int format, std::string&
 // "Open" for a recipe file (.json). False = cancelled.
 bool NativeOpenRecipeDialog(std::string& outPath);
 
-// "Open" for a scene: USD, or a file USDprep imports (.obj). False = cancelled.
+// "Open" for a scene: USD, or a file USDprep imports (.abc, .fbx, .obj). False = cancelled.
 bool NativeOpenSceneDialog(std::string& outPath);
 
 }  // namespace usdprep_addon
