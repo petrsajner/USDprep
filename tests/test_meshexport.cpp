@@ -103,10 +103,31 @@ int main() {
         const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/uvset_scene.usda", options);
         CHECK(rep.ok);
         const std::string obj = Slurp(outDir / "uvset.obj");
-        // previewuv, brought home by one tile - and not "st"
-        CHECK(obj.find("vt 0.25 0\nvt 0.75 0\nvt 0.75 1\nvt 0.25 1\n") != std::string::npos);
+        // previewuv - and not "st". The two meshes reach u 0..1.75 under a
+        // repeating texture: Nuke gets the texture laid out twice side by
+        // side and the UVs halved into it (RepeatTiles.cpp)
+        CHECK(obj.find("vt 0.625 0\nvt 0.875 0\nvt 0.875 1\nvt 0.625 1\n") != std::string::npos);
         CHECK(obj.find("vt 0.5 0.5") == std::string::npos);
         CHECK(Reported(rep, "an .abc carries the animation"));
+        bool laidOut = false;
+        for (const usdprep::ReportEntry& e : rep.entries) {
+            laidOut = laidOut || e.detail.find("laid out over the tiles their UVs reach (up to 2 x 1)") != std::string::npos;
+        }
+        CHECK(laidOut);
+        CHECK(Slurp(outDir / "uvset_obj.nk").find("checker.repeat2x1.png") != std::string::npos);
+    }
+
+    // --- without the Nuke fixes: the faces brought home by whole tiles ---
+    {
+        usdprep::ExtractOptions options;
+        options.primPaths = {"/Root"};
+        options.outputPath = (outDir / "uvset_home.obj").string();
+        options.nukeCompat = false;
+        const usdprep::Report rep = usdprep::ExtractPrims(FIXTURE_DIR "/uvset_scene.usda", options);
+        CHECK(rep.ok);
+        const std::string obj = Slurp(outDir / "uvset_home.obj");
+        CHECK(obj.find("vt 0.25 0\nvt 0.75 0\nvt 0.75 1\nvt 0.25 1\n") != std::string::npos);
+        CHECK(Slurp(outDir / "uvset_home_obj.nk").find("checker.png") != std::string::npos);
     }
 
     // --- .abc: the animation goes along, and the .nk lists every object
@@ -122,7 +143,7 @@ int main() {
             CHECK(nk.find("uvset.abc") != std::string::npos);
             CHECK(nk.find("scene_view {{0} imported: 0 1 selected: 0 1 items: /root/Root_Mover/Root_MoverShape "
                           "/root/Root_Still/Root_StillShape}") != std::string::npos);
-            CHECK(nk.find("checker.png") != std::string::npos);
+            CHECK(nk.find("checker.repeat2x1.png") != std::string::npos);
             bool range = false;
             for (const usdprep::ReportEntry& e : rep.entries) {
                 if (e.action == "abc" && e.detail.find("frames 1-3 at 25 fps") != std::string::npos) range = true;

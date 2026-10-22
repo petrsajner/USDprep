@@ -157,6 +157,8 @@ void DoPrune(Report& rep, const std::string& inputPath, const PruneOptions& opti
                           options.maxTextureSize);
     }
     if (options.nukeCompat) {
+        TileRepeatingTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
+                              options.maxTextureSize);
         CompensateRawTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures));
     }
     if (options.stripDrawModeCards) StripDrawModeCards(rep, flat);

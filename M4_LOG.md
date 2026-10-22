@@ -388,11 +388,22 @@ in `<name>.fbm`, a textures folder, and around. The film back is not in
 what assimp gives: 36 mm wide is assumed and the focal length set so the
 field of view is exact.
 
-The importers write the material colour under each texture, so that
-there is a colour to show where a texture is missing.
+**Repeating textures** (`RepeatTiles.cpp`, in the Nuke pass). Rendering
+the converted Unreal sample logs showed flat grey bark: Nuke 16.1 and
+17.0 ignore wrapS/wrapT and clamp (probe in NUKE_COMPAT.md, fifth
+measurement). The export now lays such a texture out over the tiles the
+UVs of its meshes reach and squeezes the UVs into it with one
+UsdTransform2d - the same idea as the UDIM atlas. The classic .obj/.abc
+export follows a chain of UV transforms now (it took only one).
+
+**Missing textures** no longer give black materials: the export takes a
+texture that is not there off the shaders that read it, so the input's own
+colour shows; the importers write the material colour under each texture
+for exactly that.
 
 Tests: `test_import_formats` (an Alembic scene written with the Alembic
 API - winding, collapse, squeeze, points, curves, creases; `rig.fbx` -
 frames 1001-1003, the skinned bar, the camera; broken files fail with a
-message). Alembic's fuzzer files all end in a readable "the file is
-damaged (...)". 18 tests pass.
+message), `test_repeat` (repeat, mirror, the asset's own transform folded,
+clamp untouched, a pure shift, a missing texture). Alembic's fuzzer files
+all end in a readable "the file is damaged (...)". 19 tests pass.

@@ -123,7 +123,11 @@ void DoExtract(Report& rep, const std::string& inputPath, const ExtractOptions& 
             AtlasUdimTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
                               options.maxTextureSize);
         }
-        if (options.nukeCompat && next("correcting data textures", 0.55f)) {
+        if (options.nukeCompat && next("laying out repeating textures", 0.55f)) {
+            TileRepeatingTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures),
+                                  options.maxTextureSize);
+        }
+        if (options.nukeCompat && next("correcting data textures", 0.57f)) {
             CompensateRawTextures(rep, flat, AtlasDirFor(options.outputPath, tmpPath, options.relinkTextures));
         }
         if (options.stripDrawModeCards && next("removing preview cards", 0.58f)) StripDrawModeCards(rep, flat);

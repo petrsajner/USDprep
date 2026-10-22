@@ -718,6 +718,12 @@ inline void ForgetImportSource(const UsdStageRefPtr& flat) {
 void AtlasUdimTextures(Report& rep, const UsdStageRefPtr& flat, const std::string& atlasDir,
                        int maxTileSize);
 
+// RepeatTiles.cpp: Nuke does not repeat a texture outside 0..1; a texture
+// set to repeat (or mirror) whose UVs reach other tiles gets a copy laid out
+// over those tiles under `folder` and a UsdTransform2d in front of it.
+// `maxTileSize` caps each tile (0 = as it is).
+void TileRepeatingTextures(Report& rep, const UsdStageRefPtr& flat, const std::string& folder, int maxTileSize);
+
 // RawTextures.cpp: Nuke decodes every 8-bit texture as sRGB; 8-bit textures
 // a UsdUVTexture reads as "raw" get a pre-compensated copy under `folder`.
 void CompensateRawTextures(Report& rep, const UsdStageRefPtr& flat, const std::string& folder);
@@ -870,23 +876,58 @@ inline size_t AnchorUnresolvedAssetPaths(const UsdStageRefPtr& stage) {
 inline void DropMissingDependencies(Report& rep, const std::string& tmpPath) {
     const SdfLayerRefPtr layer = SdfLayer::FindOrOpen(tmpPath);
     if (!layer) return;
+    const auto exists = [&](const std::string& assetPath) {
+        if (UsdShadeUdimUtils::IsUdimIdentifier(assetPath)) {
+            return !UsdShadeUdimUtils::ResolveUdimTilePaths(assetPath, layer).empty();
+        }
+        return !ArGetResolver().Resolve(SdfComputeAssetPathRelativeToLayer(layer, assetPath)).IsEmpty();
+    };
+    // A texture node without its file gives its fallback - black, in Nuke
+    // and in usdview alike. Taken off the shaders that read it, the inputs
+    // fall back to their own colour (what the material had under the
+    // texture) instead.
+    size_t unhooked = 0;
+    if (const UsdStageRefPtr stage = UsdStage::Open(layer, UsdStage::LoadNone)) {
+        std::set<SdfPath> missingTextures;
+        std::vector<UsdShadeShader> shaders;
+        for (const UsdPrim& prim : stage->TraverseAll()) {
+            const UsdShadeShader shader(prim);
+            if (!shader) continue;
+            shaders.push_back(shader);
+            TfToken id;
+            SdfAssetPath file;
+            const UsdShadeInput fileInput = shader.GetInput(TfToken("file"));
+            if (shader.GetShaderId(&id) && id == "UsdUVTexture" && fileInput && fileInput.Get(&file) &&
+                !file.GetAssetPath().empty() && !exists(file.GetAssetPath())) {
+                missingTextures.insert(prim.GetPath());
+            }
+        }
+        for (const UsdShadeShader& shader : missingTextures.empty() ? std::vector<UsdShadeShader>() : shaders) {
+            for (const UsdShadeInput& input : shader.GetInputs()) {
+                SdfPathVector sources, kept;
+                if (!input.GetAttr().GetConnections(&sources) || sources.empty()) continue;
+                for (const SdfPath& source : sources) {
+                    if (!missingTextures.count(source.GetPrimPath())) kept.push_back(source);
+                }
+                if (kept.size() == sources.size()) continue;
+                if (kept.empty()) {
+                    input.GetAttr().ClearConnections();
+                } else {
+                    input.GetAttr().SetConnections(kept);
+                }
+                ++unhooked;
+            }
+        }
+    }
     std::vector<std::string> missing;
     UsdUtilsModifyAssetPaths(layer, [&](const std::string& assetPath) -> std::string {
-        if (assetPath.empty()) return assetPath;
-        bool exists;
-        if (UsdShadeUdimUtils::IsUdimIdentifier(assetPath)) {
-            exists = !UsdShadeUdimUtils::ResolveUdimTilePaths(assetPath, layer).empty();
-        } else {
-            exists = !ArGetResolver()
-                          .Resolve(SdfComputeAssetPathRelativeToLayer(layer, assetPath))
-                          .IsEmpty();
-        }
-        if (exists) return assetPath;
+        if (assetPath.empty() || exists(assetPath)) return assetPath;
         missing.push_back(assetPath);
         return std::string();
     });
-    if (missing.empty()) return;
+    if (missing.empty() && unhooked == 0) return;
     layer->Save();
+    if (missing.empty()) return;
     std::string names;
     for (size_t i = 0; i < missing.size() && i < 3; ++i) {
         names += (i == 0 ? "" : ", ") + std::filesystem::path(missing[i]).filename().string();
@@ -894,7 +935,8 @@ inline void DropMissingDependencies(Report& rep, const std::string& tmpPath) {
     if (missing.size() > 3) names += ", ...";
     rep.Warn("textures", std::to_string(missing.size()) +
                              " texture file(s) are not on this machine and were left out: " +
-                             names);
+                             names +
+                             (unhooked > 0 ? std::string(" - their materials show their own colour there") : std::string()));
 }
 
 // A texture bigger than Nuke will ever show (hero 8K UDIM sets) is scaled

@@ -10,6 +10,7 @@ add_library(usdprep-core
     src/Select.cpp
     src/Simplify.cpp
     src/UdimAtlas.cpp
+    src/RepeatTiles.cpp
     src/RawTextures.cpp
     src/NukeCompat.cpp
     src/NukeGeometry.cpp

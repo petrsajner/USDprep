@@ -181,7 +181,8 @@ story += [p("That is the whole workflow. The rest of this manual explains the ch
             "moved by a skeleton or by blend shapes is baked into a point cache, frame by frame: in Nuke it simply "
             "plays, there is no rig to set up. A texture path written on another computer is looked for next to "
             "the <font face='Courier'>.fbx</font>, in its <font face='Courier'>.fbm</font> folder and in the "
-            "folders around it; a texture that cannot be found is named. An FBX camera keeps its exact field of view; the film back is not in what the file gives, so "
+            "folders around it; a texture that cannot be found is named, and the object shows its material's "
+            "colour. An FBX camera keeps its exact field of view; the film back is not in what the file gives, so "
             "a 36 mm wide one is assumed and the focal length set to match."),
           p("<b>OBJ.</b> Every object or group of the OBJ becomes an object in the list, with its polygons as they are, its "
             "UVs, normals and vertex colours, and the materials of its <font face='Courier'>.mtl</font> file with "
@@ -370,6 +371,10 @@ story += [table([
     ["In the scene", "What Nuke would do", "What USDprep does"],
     ["Textures split into UDIM tiles", "Black material", "Joins the tiles into one texture and adjusts the "
                                                            "material to use it"],
+    ["A texture repeated across a surface (wood, bricks, game assets)", "Smears the texture's edge over the "
+     "surface", "Lays the texture out over the repeats in a copy and adjusts the material to use it"],
+    ["A texture that is not on this computer", "Black material", "Leaves it out and lets the material show "
+                                                                  "its own colour"],
     ["Lights Nuke cannot use (rectangular, cylinder...)", "Ignores them",
      "Replaces each by an axis of the same name in the same place (only when <i>Include lights</i> is on)"],
     ["Guide and proxy geometry", "Draws it on top of the real object", "Removes it, or hides it if you keep it"],
@@ -401,7 +406,8 @@ story += [table([
                           "be converted (for example curves). Also check that the part was inside your "
                           "selection - press the up arrow to select the bigger object."],
     ["The report says textures were left out", "Those texture files are not on this computer; the scene "
-                                               "points at a place you cannot reach. Ask for the textures."],
+                                               "points at a place you cannot reach. Ask for the textures. "
+                                               "Until then the objects show their material's colour."],
     ["An FBX or OBJ object is grey or plain after opening", "Hover over <i>converted</i> in the panel header: "
                                                             "it names the textures that were not found. Put them "
                                                             "next to the file, or in a <i>textures</i> folder "

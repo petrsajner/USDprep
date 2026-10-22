@@ -84,14 +84,19 @@ Look LookOf(const UsdPrim& meshPrim) {
     if (const UsdShadeInput wrap = texture.GetInput(TfToken("wrapT"))) wrap.Get(&wrapT);
     look.repeats = wrapS != "clamp" && wrapS != "black" && wrapT != "clamp" && wrapT != "black";
     // Which UVs the texture is looked up with: whatever feeds its st - a
-    // primvar reader, possibly through a UsdTransform2d (our UDIM atlas).
-    // Production assets do not always call it "st" (ALab's preview
-    // materials read "perfuv").
+    // primvar reader, possibly through UsdTransform2d nodes (our UDIM atlas,
+    // our repeat tiles, the asset's own), outermost first. Production assets
+    // do not always call it "st" (ALab's preview materials read "perfuv").
     UsdShadeShader reader = SourceOf(texture.GetInput(TfToken("st")));
     TfToken id;
-    if (reader && reader.GetShaderId(&id) && id == "UsdTransform2d") {
-        if (const UsdShadeInput scale = reader.GetInput(TfToken("scale"))) scale.Get(&look.uvScale);
-        if (const UsdShadeInput offset = reader.GetInput(TfToken("translation"))) offset.Get(&look.uvOffset);
+    std::set<SdfPath> seen;
+    while (reader && reader.GetShaderId(&id) && id == "UsdTransform2d" && seen.insert(reader.GetPath()).second) {
+        GfVec2f scale(1.0f), offset(0.0f);
+        if (const UsdShadeInput input = reader.GetInput(TfToken("scale"))) input.Get(&scale);
+        if (const UsdShadeInput input = reader.GetInput(TfToken("translation"))) input.Get(&offset);
+        // outer(inner(uv)): the inner one's offset goes through the outer scale
+        look.uvOffset = GfVec2f(look.uvScale[0] * offset[0] + look.uvOffset[0], look.uvScale[1] * offset[1] + look.uvOffset[1]);
+        look.uvScale = GfVec2f(look.uvScale[0] * scale[0], look.uvScale[1] * scale[1]);
         reader = SourceOf(reader.GetInput(TfToken("in")));
     }
     if (reader && reader.GetShaderId(&id) && id == "UsdPrimvarReader_float2") {

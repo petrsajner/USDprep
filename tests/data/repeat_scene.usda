@@ -1,0 +1,262 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    upAxis = "Y"
+)
+
+# Fixture for repeating textures (RepeatTiles.cpp). Nuke does not repeat a
+# texture outside 0..1, so the export lays each one out over the tiles its
+# UVs reach. textures/quads.png is 4 x 4 px: red | green below, blue |
+# yellow above.
+#   Tiled     UVs 0..3 x 0..2, repeat          -> a 3 x 2 copy
+#   Mirrored  UVs -1..1 x 0..1, mirror in u    -> a 2 x 1 copy, tile -1 mirrored
+#   Scaled    UVs 0..1, the asset's own UsdTransform2d scales u by 6
+#             -> a 6 x 1 copy, one transform folded from both
+#   Clamped   UVs 0..3, clamp                  -> left alone
+#   Shifted   UVs 2.25..2.75 x 0..1, repeat    -> no copy, moved home by 2
+#   Missing   a texture that is not there      -> taken off the surface, the
+#             material's own colour shows
+def Xform "Root"
+{
+    def Mesh "Tiled" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (3, 0), (3, 2), (0, 2)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/Repeat>
+    }
+
+    def Mesh "Mirrored" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(2, 0, 0), (3, 0, 0), (3, 1, 0), (2, 1, 0)]
+        texCoord2f[] primvars:st = [(-1, 0), (1, 0), (1, 1), (-1, 1)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </Root/Looks/Mirror>
+    }
+
+    def Mesh "Scaled"
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(4, 0, 0), (5, 0, 0), (5, 1, 0), (4, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/Scaled>
+    }
+
+    def Mesh "Clamped" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(6, 0, 0), (7, 0, 0), (7, 1, 0), (6, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (3, 0), (3, 3), (0, 3)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/Clamp>
+    }
+
+    def Mesh "Shifted" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(8, 0, 0), (9, 0, 0), (9, 1, 0), (8, 1, 0)]
+        texCoord2f[] primvars:st = [(2.25, 0), (2.75, 0), (2.75, 1), (2.25, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/Shift>
+    }
+
+    def Mesh "Missing" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(10, 0, 0), (11, 0, 0), (11, 1, 0), (10, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/Gone>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Repeat"
+        {
+            token outputs:surface.connect = </Root/Looks/Repeat/Surface.outputs:surface>
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Repeat/Tex.outputs:rgb>
+                token outputs:surface
+            }
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/quads.png@
+                float2 inputs:st.connect = </Root/Looks/Repeat/Reader.outputs:result>
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "repeat"
+                float3 outputs:rgb
+            }
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "Mirror"
+        {
+            token outputs:surface.connect = </Root/Looks/Mirror/Surface.outputs:surface>
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Mirror/Tex.outputs:rgb>
+                token outputs:surface
+            }
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/quads.png@
+                float2 inputs:st.connect = </Root/Looks/Mirror/Reader.outputs:result>
+                token inputs:wrapS = "mirror"
+                token inputs:wrapT = "repeat"
+                float3 outputs:rgb
+            }
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "Scaled"
+        {
+            token outputs:surface.connect = </Root/Looks/Scaled/Surface.outputs:surface>
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Scaled/Tex.outputs:rgb>
+                token outputs:surface
+            }
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/quads.png@
+                float2 inputs:st.connect = </Root/Looks/Scaled/Place.outputs:result>
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "repeat"
+                float3 outputs:rgb
+            }
+            def Shader "Place"
+            {
+                uniform token info:id = "UsdTransform2d"
+                float2 inputs:in.connect = </Root/Looks/Scaled/Reader.outputs:result>
+                float2 inputs:scale = (6, 1)
+                float2 inputs:translation = (0, 0)
+                float2 outputs:result
+            }
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "Clamp"
+        {
+            token outputs:surface.connect = </Root/Looks/Clamp/Surface.outputs:surface>
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Clamp/Tex.outputs:rgb>
+                token outputs:surface
+            }
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/quads.png@
+                float2 inputs:st.connect = </Root/Looks/Clamp/Reader.outputs:result>
+                token inputs:wrapS = "clamp"
+                token inputs:wrapT = "clamp"
+                float3 outputs:rgb
+            }
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "Shift"
+        {
+            token outputs:surface.connect = </Root/Looks/Shift/Surface.outputs:surface>
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/Shift/Tex.outputs:rgb>
+                token outputs:surface
+            }
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/quads.png@
+                float2 inputs:st.connect = </Root/Looks/Shift/Reader.outputs:result>
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "repeat"
+                float3 outputs:rgb
+            }
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "Gone"
+        {
+            token outputs:surface.connect = </Root/Looks/Gone/Surface.outputs:surface>
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.2, 0.4, 0.6)
+                color3f inputs:diffuseColor.connect = </Root/Looks/Gone/Tex.outputs:rgb>
+                token outputs:surface
+            }
+            def Shader "Tex"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/not_on_this_machine.png@
+                float2 inputs:st.connect = </Root/Looks/Gone/Reader.outputs:result>
+                float3 outputs:rgb
+            }
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+    }
+}

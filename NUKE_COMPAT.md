@@ -23,7 +23,9 @@ column is enough.
 | `<UDIM>` template, several tiles | ❌ black | → UDIM atlas |
 | `<UDIM>` template, a single tile | ❌ black | → rewritten to the tile |
 | `UsdTransform2d` | ✅ | what the atlas relies on — fine in 16 too |
-| a texture that is not there | black material, no error | we leave them out and say so |
+| a texture that is not there | black material, no error | we leave them out, take them off the material (its own colour shows) and say so |
+| `wrapS` / `wrapT` = repeat or mirror, UVs outside 0..1 | ❌ edge pixels smeared (clamp), whatever the wrap mode | → repeat tiles (fifth measurement) |
+| two `UsdTransform2d` in a row | ✅ both applied | |
 | unflattened references, variant selections | ✅ | flattening is for portability, not for Nuke |
 
 ## Materials
@@ -200,6 +202,41 @@ triangles - once at the origin and once at survey coordinates (4,512,000 /
 - The meshoptimizer decimation reaches the requested share even with 625
   UV charts: 2,003,000 -> 20,029 triangles at 1/100, in about 3 s.
 
+## Imported Alembic and FBX, repeating textures (fifth measurement)
+
+`.abc` and `.fbx` files are converted to USD on opening
+(`AbcImport.cpp` with the Alembic library, `FbxImport.cpp` with assimp)
+and exported like any scene. Real files through `usdcut extract` with the
+nuke preset, rendered with `tools/nuke/render_matrix.py`
+(`testdata/out/nuke_import_formats`), same pictures in 16.1v4 and 17.0v1:
+
+| File | What it is | Nuke |
+|---|---|---|
+| Cabin.fbx (Unreal sample) | 1 mesh, 8 materials on faces, 6 textures packed in the .fbx | textured; split per material |
+| firelogs.fbx | bark tiled six times each way (`UsdTransform2d` scale 6) | **flat grey before**, textured after the repeat tiles |
+| Rock.fbx | its texture is not on this machine | **black before**, its material colour after |
+| a Meshy wolf, 308,626 polygons | PBR maps packed in the .fbx | textured, data maps corrected |
+| rig.fbx (hand-written, `tests/data/fbx`) | a moving box, a bar skinned to two bones, a camera, frames 1001-1003 | the bar bends at 1002 / 1003; frames start at 1001 |
+| Trex_UVtile_skin.abc (Nuke's own demo) | 1 mesh | drawn |
+| outfit.abc (ALab) | 2 point caches, frames 1004-1057 | deforms |
+
+Repeating textures, measured on their own (`tools/nuke/make_wrap_probe.py`,
+`testdata/out/nuke_wrap`): a quad with UVs 0..3 and a 2 x 2 texture set
+to repeat shows one big tile and the edge pixels smeared over the rest -
+the same with mirror, with no wrap mode, and with UVs 0..1 through a
+`UsdTransform2d` of scale 3. Only a texture already laid out 3 x 3 shows
+3 x 3 tiles. Two `UsdTransform2d` in a row are both applied.
+
+So the export lays the texture out over the tiles the UVs of the meshes
+bound to it reach (`name.repeat6x6.png`, mirrored tiles flipped,
+`name.mirror2x1odd.png` when the first tile is an odd one) and puts one
+`UsdTransform2d` in front of it that squeezes the UVs into the copy - the
+asset's own transform folded into it when it has no rotation, followed
+otherwise (`src/core/src/RepeatTiles.cpp`). UVs that sit in one other
+tile only get the shift, no copy. A texture set to clamp or black is not
+touched on that axis. Copies are capped like the UDIM atlas (16,384 px a
+side, tiles scaled down to fit).
+
 ## What the tool does about it
 
 The rule (Petr, 2026-09-20): stay as close as possible to what a 3D
@@ -217,6 +254,8 @@ row was re-rendered in Nuke 16.1 and 17.0 after the conversion.
 |---|---|---|---|
 | `.usdz` textures | output is `.usdc` + textures folder | — | ✅ |
 | `<UDIM>` sets | stitched into an atlas, `UsdTransform2d` in the material | — | ✅ |
+| repeating textures (UVs outside 0..1) | laid out over the tiles the UVs reach, `UsdTransform2d` in the material (`RepeatTiles.cpp`) | — | ✅ |
+| a texture that is not there | left out and taken off its material - the material's own colour shows instead of black | — | ✅ |
 | lights (any light switches Nuke's unlit default off) | **left out** ("Include lights" / `--lights`) | distant, sphere, disk and dome lights stay lights; rect, cylinder and the rest become **axes of the same name**, position and settings still on them | ✅ |
 | guide / proxy geometry (drawn on top of the real thing) | removed | kept in the file but **hidden** | ✅ |
 | MaterialX output next to a standard surface (renders black) | removed with the renderer outputs | the MaterialX output alone is removed | ✅ |

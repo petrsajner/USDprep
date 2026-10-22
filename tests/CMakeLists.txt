@@ -34,6 +34,7 @@ usdprep_add_test(test_nukecompat)
 usdprep_add_test(test_meshexport)
 usdprep_add_test(test_import)
 usdprep_add_test(test_progress)
+usdprep_add_test(test_repeat)
 usdprep_add_test(test_import_formats)
 # the Alembic scene the test reads is written with the Alembic library itself
 find_package(Alembic CONFIG QUIET PATHS "${CMAKE_CURRENT_LIST_DIR}/../third_party/alembic-install" NO_DEFAULT_PATH)
